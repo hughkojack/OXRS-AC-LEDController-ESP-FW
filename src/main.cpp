@@ -50,7 +50,7 @@
   #include <SPI.h>                  // for ethernet
   #include <Ethernet.h>             // For networking
 #endif
-#else if (esp32)
+#elif defined(esp32)
 #include <WiFi.h>                   // For networking
 #if defined(ethMode)
   #include <SPI.h>                  // for ethernet
