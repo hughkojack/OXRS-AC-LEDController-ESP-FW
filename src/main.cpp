@@ -24,16 +24,17 @@
 #include <Arduino.h>
 
 /*----------------------- Board Type --------------------------------*/
-// #define esp8266  
-#define esp32
+//#define esp8266  
+//#define esp32
+//#define lilygo
 
 /*----------------------- Connection Type --------------------------------*/
 // select connection mode here - comment / uncomment the one needed
-#define ethMode    // uses ethernet
+//#define ethMode    // uses ethernet
 //#define wifiMode   // uses wifi
 
 /*----------------------- Modetype Type --------------------------------*/
-#define gpioMode  // uses 5ch GPIO mosfet control
+//#define gpioMode  // uses 5ch GPIO mosfet control
 //#define pcaMode   // uses I2C PCA controller
 
 /*--------------------------- Version ------------------------------------*/
@@ -50,11 +51,21 @@
   #include <SPI.h>                  // for ethernet
   #include <Ethernet.h>             // For networking
 #endif
-#elif defined(esp32)
+#endif
+
+#if defined(esp32)
 #include <WiFi.h>                   // For networking
 #if defined(ethMode)
   #include <SPI.h>                  // for ethernet
-  // #include <ETH.h>                  // For networking <-- need to find
+  #include <Ethernet.h>             // For networking <-- need to find
+#endif
+#endif
+
+#if defined(lilygo)
+#include <WiFi.h>                   // For networking
+#if defined(ethMode)
+  #include <SPI.h>                  // for ethernet
+  #include <ETH.h>                  // For networking <-- need to find
 #endif
 #endif
 
