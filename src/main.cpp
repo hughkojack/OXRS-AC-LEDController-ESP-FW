@@ -23,27 +23,36 @@
 
 #include <Arduino.h>
 
-/*----------------------- Board Type --------------------------------*/
+/*------------------------ Board Type ---------------------------------*/
 //#define esp8266  
 //#define esp32
 //#define lilygo
 
-/*----------------------- Connection Type --------------------------------*/
+/*----------------------- Connection Type -----------------------------*/
 // select connection mode here - comment / uncomment the one needed
 //#define ethMode    // uses ethernet
 //#define wifiMode   // uses wifi
 
-/*----------------------- Modetype Type --------------------------------*/
+/*----------------------- Modetype Type -------------------------------*/
 //#define gpioMode  // uses 5ch GPIO mosfet control
 //#define pcaMode   // uses I2C PCA controller
 
-/*--------------------------- Version ------------------------------------*/
+/*------------------------- I2C pins ----------------------------------*/
+//#define I2C_SDA   
+//#define I2C_SCL
+
+//rack32   = 21  22
+//LilyGO   = 33  32
+//room8266 =  4   5
+//D1 mini  =  4   0
+
+/*--------------------------- Version ---------------------------------*/
 #define FW_NAME       "OXRS-AC-LedController-ESP-FW"
 #define FW_SHORT_NAME "LED Controller"
 #define FW_MAKER      "Austin's Creations"
 #define FW_VERSION    "2.0.0"
 
-/*--------------------------- Libraries ----------------------------------*/
+/*--------------------------- Libraries -------------------------------*/
 
 #if defined(esp8266)
 #include <ESP8266WiFi.h>            // For networking
@@ -76,11 +85,12 @@
 #include <OXRS_SENSORS.h>           // For QWICC I2C sensors
 #include <ledPWM.h>                 // For PWM LED controller
 
-/*--------------------------- Configuration ------------------------------*/
+/*----------------------------- Configuration -----------------------------*/
 // Should be no user configuration in this file, everything should be in;
 #if defined(wifiMode)
 #include "config.h"
 #endif
+
 
 
 void setup() {
