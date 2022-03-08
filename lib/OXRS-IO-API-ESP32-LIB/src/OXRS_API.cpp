@@ -334,7 +334,7 @@ OXRS_API::OXRS_API(OXRS_MQTT& mqtt)
 void OXRS_API::wifiManager()
 {
   WiFi.mode(WIFI_STA);
-  _apiWm.setWiFiAutoReconnect(true);
+  // _apiWm.setWiFiAutoReconnect(true);
   bool res;
   res = _apiWm.autoConnect("OXRS_WiFi", "password"); // password protected ap
   if (!res)

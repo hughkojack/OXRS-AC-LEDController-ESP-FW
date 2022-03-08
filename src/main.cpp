@@ -21,21 +21,21 @@
   Copyright 2021 Austins Creations
 */
 
-#include <Arduino.h>
+// #include <Arduino.h>
 
 /*------------------------ Board Type ---------------------------------*/
 // #define esp8266  
 // #define esp32
-// #define lilyESP
+// #define lilygoESP
 
 /*----------------------- Connection Type -----------------------------*/
 // select connection mode here - comment / uncomment the one needed
-//#define ethMode    // uses ethernet
+// #define ethMode    // uses ethernet
 //#define wifiModes   // uses wifi
 
 /*----------------------- Modetype Type -------------------------------*/
-// #define gpioModes // uses 5ch GPIO mosfet control
-// #define pcaModes  // uses I2C PCA controller
+// #define gpioMode // uses 5ch GPIO mosfet control
+// #define pcaMode  // uses I2C PCA controller
 
 /*------------------------- I2C pins ----------------------------------*/
 //#define I2C_SDA   
@@ -70,7 +70,7 @@
 #endif
 #endif
 
-#if defined(lilyESP)
+#if defined(lilygoESP)
 #include <WiFi.h>                   // For networking
 #if defined(ethMode)
   #include <SPI.h>                  // for ethernet
@@ -109,7 +109,7 @@
 
 // Ethernet
 #if defined(ethMode)
-#if defined(lilyESP)
+#if defined(lilygoESP)
 #define ETH_CLOCK_MODE              ETH_CLOCK_GPIO17_OUT   // Version with not PSRAM
 #define ETH_PHY_TYPE                ETH_PHY_LAN8720        // Type of the Ethernet PHY (LAN8720 or TLK110)  
 #define ETH_PHY_POWER               -1                     // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
@@ -176,7 +176,7 @@ WiFiServer server(REST_API_PORT);
 #endif
 
 #if defined(ethMode)
-#if defined(lilyESP)
+#if defined(lilygoESP)
 // Ethernet client (even tho using WiFiClient type!)
 WiFiClient client;
 WiFiServer server(REST_API_PORT);
@@ -197,7 +197,7 @@ EthernetServer server(REST_API_PORT);
 #endif
 
 #if defined(ethMode) || defined(wifiModes)
-#if defined(esp8266) || defined(esp32) || defined(lilyESP)
+#if defined(esp8266) || defined(esp32) || defined(lilygoESP)
 PubSubClient mqttClient(client);
 OXRS_MQTT mqtt(mqttClient);
 OXRS_API api(mqtt);
@@ -211,7 +211,7 @@ PWMDriver pwmDriver[PCA_COUNT];
 
 // LED strip config (allow for a max of all single LED strips)
 LEDStrip ledStrips[PCA_COUNT][PCA_CHANNEL_COUNT];
-#elif defined(gpioModes)
+#elif defined(gpioMode)
 // PWM LED controller
 PWMDriver pwmDriver;
 
@@ -221,31 +221,31 @@ LEDStrip ledStrips[PWM_CHANNEL_COUNT];
 
 /*--------------------------- Sub routines -----------------*/
 
-#if defined(lilyESP)
+#if defined(lilygoESP)
 void WiFiEvent(WiFiEvent_t event)
 {
   // Log the event to serial for debugging
   switch (event)
   {
-    case ARDUINO_EVENT_ETH_START:
+    case SYSTEM_EVENT_ETH_START:
       Serial.print(F("[ledc] ethernet started: "));
       Serial.println(ETH.macAddress());
       break;
-    case ARDUINO_EVENT_ETH_CONNECTED:
+    case SYSTEM_EVENT_ETH_CONNECTED:
       Serial.print(F("[ledc] ethernet connected: "));
       if (ETH.fullDuplex()) { Serial.print(F("full duplex ")); }
       Serial.print(F("@ "));
       Serial.print(ETH.linkSpeed());
       Serial.println(F("mbps"));
       break;
-    case ARDUINO_EVENT_ETH_GOT_IP:
+    case SYSTEM_EVENT_ETH_GOT_IP:
       Serial.print(F("[ledc] ip assigned: "));
       Serial.println(ETH.localIP());
       break;
-    case ARDUINO_EVENT_ETH_DISCONNECTED:
+    case SYSTEM_EVENT_ETH_DISCONNECTED:
       Serial.println(F("[ledc] ethernet disconnected"));
       break;
-    case ARDUINO_EVENT_ETH_STOP:
+    case SYSTEM_EVENT_ETH_STOP:
       Serial.println(F("[ledc] ethernet stopped"));
       break;
     default:
@@ -253,7 +253,7 @@ void WiFiEvent(WiFiEvent_t event)
   }
 
   // Once our ethernet controller has started continue initialisation
-  if (event == ARDUINO_EVENT_ETH_START)
+  if (event == SYSTEM_EVENT_ETH_START)
   {
     // Set up MQTT (don't attempt to connect yet)
     // byte mac[6];
@@ -266,7 +266,7 @@ void WiFiEvent(WiFiEvent_t event)
 #endif
 
 #if defined(ethMode)
-#if defined(lilyESP)
+#if defined(lilygoESP)
 // // Listen for ethernet events
 //   WiFi.onEvent(wifiEvent);
   
@@ -331,21 +331,21 @@ void initialiseEthernet(byte * mac)
 #endif
 
 
-#if defined(esp8266) || defined(esp32) || defined(lilyESP)
+#if defined(esp8266) || defined(esp32) || defined(lilygoESP)
 /**
   MQTT
 */
 void mqttCallback(char * topic, uint8_t * payload, unsigned int length) 
 {
   // Pass this message down to our MQTT handler
-  mqtt.receive(topic, payload, length);
+  // mqtt.receive(topic, payload, length);
 }
 #endif
 
 void setup() {
   
 #if defined(ethMode)
-#if defined(lilyESP)
+#if defined(lilygoESP)
 // Listen for ethernet events
   WiFi.onEvent(WiFiEvent);
   
