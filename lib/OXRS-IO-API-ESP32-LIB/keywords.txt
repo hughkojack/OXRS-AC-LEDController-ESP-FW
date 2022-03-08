@@ -1,0 +1,25 @@
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+OXRS_API	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin			KEYWORD2
+checkEthernet		KEYWORD2
+checkWifi		KEYWORD2
+onAdopt			KEYWORD2
+getAdopt		KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+JSON_SCHEMA_VERSION	LITERAL1
+JSON_MQTT_MAX_SIZE	LITERAL1
+JSON_CONFIG_MAX_SIZE	LITERAL1
+JSON_COMMAND_MAX_SIZE	LITERAL1
+JSON_ADOPT_MAX_SIZE	LITERAL1
