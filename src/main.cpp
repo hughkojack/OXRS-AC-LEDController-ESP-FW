@@ -14,8 +14,7 @@
     "OXRS-IO-API-ESP32-LIB" by OXRS Core Team
     "OXRS-AC-I2CSensors-ESP-LIB" by Austins Creations
     "ledPWM" by Austins Creations
-  
-    
+      
   GitHub repository:
    
     
