@@ -86,6 +86,7 @@
 #include <OXRS_API.h>               // For REST API
 #include <OXRS_SENSORS.h>           // For QWICC I2C sensors
 #include <ledPWM.h>                 // For PWM LED controller
+#include <WiFiManager.h>            // captive wifi AP config
 
 /*--------------------------- Constants ----------------------------------*/
 // Serial
@@ -184,6 +185,7 @@ WiFiServer server(REST_API_PORT);
 
 #if defined(WIFIMODE)
 #if defined(MCULILY) || defined(MCU8266) || defined(MCU32)
+WiFiManager wm; 
 WiFiClient client;
 WiFiServer server(REST_API_PORT);
 #endif
@@ -960,6 +962,35 @@ void WiFiEvent(WiFiEvent_t event)
 }
 #endif
 
+#if defined(WIFIMODE)
+void initialiseWifi(byte * mac)
+{
+  // Ensure we are in the correct WiFi mode
+  WiFi.mode(WIFI_STA);
+
+  // Connect using saved creds, or start captive portal if none found
+  // Blocks until connected or the portal is closed
+  if (!wm.autoConnect("OXRS_WiFi", "superhouse"))
+  {
+    // If we are unable to connect then restart
+    ESP.restart();
+  }
+  
+  // Get ESP8266 base MAC address
+  WiFi.macAddress(mac);
+
+  // Format the MAC address for display
+  char mac_display[18];
+  sprintf_P(mac_display, PSTR("%02X:%02X:%02X:%02X:%02X:%02X"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  // Display MAC/IP addresses on serial
+  Serial.print(F("[ledc] mac address: "));
+  Serial.println(mac_display);  
+  Serial.print(F("[ledc] ip address: "));
+  Serial.println(WiFi.localIP());
+}
+#endif
+
 #if defined(ETHMODE)
 void initialiseEthernet()
 {
@@ -1049,6 +1080,9 @@ void setup()
   #endif
 
   #if defined(GPIOMODE)
+  #if defined(BULB)
+  pwmDriver.begin_gpio(4,12,14,5,13);
+  #else
   #if defined(MCU8266)
   pwmDriver.begin_gpio(15,13,12,14,5);
   #endif
@@ -1056,6 +1090,7 @@ void setup()
   pwmDriver.begin_gpio(14,04,12,15,16);
   #endif
   initialiseStrips(0);                    // Initialise LED strip config
+  #endif
   #endif
 
   #if defined(PCAMODE)
@@ -1081,8 +1116,8 @@ void setup()
   initialiseEthernet();
   #endif
   #if defined(WIFIMODE)
-  sensors.oled(WiFi.macAddress(mac));     // start screen - starts with MAC address showing
-  api.wifiManager();                     // start wifimanager - open AP to save wifi creds / or connects to previously saved creds
+  sensors.oled(WiFi.macAddress(mac));    // start screen - starts with MAC address showing
+  initialiseWifi(mac);
   sensors.oled(WiFi.localIP());           // update screen - should show IP address
   #endif
 
