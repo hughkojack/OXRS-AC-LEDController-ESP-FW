@@ -70,6 +70,7 @@ UNIXtime = env['UNIX_TIME']
 
 # FinalBIN = "Distribution/" + MyName + " (" + MyType + " _ " + MyBuild + ").bin"
 FinalBIN = "Binaries/" + MyName + " (" + MyBuild + " _ " + MyVersion + ").bin"
+# FinalBIN = "Binaries/" + MyName + " (" + MyType + " _ " + MyVersion + ").bin"
 
 def Copy_Binary(*args, **kwargs):
     print("\n>---------- POST Compile BEGIN ----------<")
