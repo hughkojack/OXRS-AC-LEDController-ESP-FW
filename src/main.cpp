@@ -239,6 +239,22 @@ void getFirmwareJson(JsonVariant json)
   firmware["version"] = FW_VERSION;
 }
 
+void getMemoryJson(JsonVariant json)
+{
+  JsonObject memory = json.createNestedObject("memory");
+
+  memory["sketchSizeBytes"] = ESP.getSketchSize();
+  memory["freeSketchSpaceBytes"] = ESP.getFreeSketchSpace();
+  memory["flashChipSizeBytes"] = ESP.getFlashChipSize();
+  #if defined(MCU8266)
+  FSInfo fs_info;
+  LittleFS.info(fs_info);
+  memory["fileSystemSizeBytes"] = fs_info.totalBytes;
+  #elif defined(MCU32) || defined(MCULILY)
+  memory["fileSystemSizeBytes"] = SPIFFS.totalBytes();
+  #endif
+}
+
 void getNetworkJson(JsonVariant json)
 {
   #if defined(MCULILY) && defined(ETHMODE)
@@ -400,6 +416,7 @@ void apiAdopt(JsonVariant json)
 {
   // Build device adoption info
   getFirmwareJson(json);
+  getMemoryJson(json);
   getNetworkJson(json);
   getConfigSchemaJson(json);
   getCommandSchemaJson(json);
