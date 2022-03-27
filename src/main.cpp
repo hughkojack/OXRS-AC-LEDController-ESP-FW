@@ -2,25 +2,28 @@
   PWM LED controller firmware for the Open eXtensible Rack System
   
   See https://oxrs.io/docs/hardware/output-devices/pwm-controllers.html for documentation.
+  
   Compile options:
-    ESP32   (rack32)     - wifi and ethernet
+    ESP32   (Rack32)     - wifi and ethernet
     ESP32   (LilyGO POE) - wifi and ethernet
     ESP8266 (D1 Mini)    - wifi
-    ESP8266 (room8266)   - wifi and ethernet
+    ESP8266 (Room8266)   - wifi and ethernet
     
   External dependencies. Install using the Arduino library manager:
-    "PubSubClient" by Nick O'Leary
-    "OXRS-IO-MQTT-ESP32-LIB" by OXRS Core Team
-    "OXRS-IO-API-ESP32-LIB" by OXRS Core Team
-    "OXRS-AC-I2CSensors-ESP-LIB" by Austins Creations
-    "ledPWM" by Austins Creations
-      
+    [PubSubClient](https://github.com/knolleary/pubsubclient)
+    [OXRS-IO-API-ESP32-LIB](https://github.com/OXRS-IO/OXRS-IO-API-ESP32-LIB)
+    [OXRS-IO-MQTT-ESP32-LIB](https://github.com/OXRS-IO/OXRS-IO-MQTT-ESP32-LIB)
+    [OXRS-AC-I2CSensors-ESP-LIB](https://github.com/austinscreations/OXRS-AC-I2CSensors-ESP-LIB)
+    [ledPWM](https://github.com/austinscreations/ledPWM)
+    [WiFiManager](https://github.com/tzapu/WiFiManager)
+
   GitHub repository:
-   
-    
+    https://github.com/austinscreations/OXRS-AC-LEDController-ESP-FW
+
   Bugs/Features:
     See GitHub issues list
-  Copyright 2021 Austins Creations
+
+  Copyright 2022 Austins Creations
 */
 
 #include <Arduino.h>
@@ -55,7 +58,6 @@
 #define FW_VERSION    "2.0.0"
 
 /*--------------------------- Libraries -------------------------------*/
-
 #if defined(MCU8266)
 #include <ESP8266WiFi.h>            // For networking
 #if defined(ETHMODE)
