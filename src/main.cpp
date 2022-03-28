@@ -168,6 +168,9 @@ uint32_t g_fade_interval_us = DEFAULT_FADE_INTERVAL_US;
 // Flashing state for any strips in flash mode
 uint8_t g_flash_state = LOW;
 
+// stack size counter (for determine used heap size on ESP8266)
+char * g_stack_start;
+
 /*--------------------------- Instantiate Global Objects -----------------*/
 #if defined(ETHMODE)
 #if defined(MCU8266) || defined(MCU32)
@@ -201,6 +204,12 @@ PWMDriver pwmDriver[PWM_CONTROLLER_COUNT];
 LEDStrip ledStrips[PWM_CONTROLLER_COUNT][PWM_CHANNEL_COUNT];
 
 /*--------------------------- JSON builders -----------------*/
+uint32_t getStackSize()
+{
+  char stack;
+  return (uint32_t)g_stack_start - (uint32_t)&stack;  
+}
+
 void getFirmwareJson(JsonVariant json)
 {
   JsonObject firmware = json.createNestedObject("firmware");
@@ -215,14 +224,18 @@ void getSystemJson(JsonVariant json)
 {
   JsonObject system = json.createNestedObject("system");
 
+  system["flashChipSizeBytes"] = ESP.getFlashChipSize();
   system["heapFreeBytes"] = ESP.getFreeHeap();
 
   #if defined(MCU32) || defined(MCULILY)
   system["heapUsedBytes"] = ESP.getHeapSize();
   system["heapMaxAllocBytes"] = ESP.getMaxAllocHeap();
+  
+  #elif defined(MCU8266)
+  system["heapUsedBytes"] = getStackSize();
+  
   #endif
 
-  system["flashChipSizeBytes"] = ESP.getFlashChipSize();
   system["sketchSpaceUsedBytes"] = ESP.getSketchSize();
   system["sketchSpaceTotalBytes"] = ESP.getFreeSketchSpace();
 
@@ -1020,6 +1033,11 @@ void initialiseEthernet()
 /*--------------------------- Program -------------------------------*/
 void setup()
 {
+  // Store the address of the stack at startup so we can determine
+  // the stack size at runtime (see getStackSize())
+  char stack;
+  g_stack_start = &stack;
+  
   // Startup logging to serial
   Serial.begin(SERIAL_BAUD_RATE);
   delay(1000);
