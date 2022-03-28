@@ -54,6 +54,7 @@ def walkItems(haystack, needle):
 
 Import("env", "projenv")
 from shutil import copyfile
+import os
 
 Import("env")
 
@@ -68,27 +69,25 @@ MyBuild = env['PIOENV']
 
 UNIXtime = env['UNIX_TIME']
 
-# FinalBIN = "Distribution/" + MyName + " (" + MyType + " _ " + MyBuild + ").bin"
-FinalBIN = "Binaries/" + MyName + " (" + MyBuild + " _ " + MyVersion + ").bin"
-# FinalBIN = "Binaries/" + MyName + " (" + MyType + " _ " + MyVersion + ").bin"
+BinaryDir = os.path.join(os.getcwd(), "binaries", MyVersion);
+BinaryName = MyName + "_" + MyBuild + "_" + MyVersion + ".bin"
+
+if not os.path.exists(BinaryDir):
+	os.makedirs(BinaryDir)
+
+BinaryPath = os.path.join(BinaryDir, BinaryName)
 
 def Copy_Binary(*args, **kwargs):
     print("\n>---------- POST Compile BEGIN ----------<")
 
-    print("Copying binary to distribution directory:\n", FinalBIN)
+    print("Copying binary to distribution directory:\n", BinaryDir)
 
     target = str(kwargs['target'][0])
-    copyfile(target, FinalBIN)
+    copyfile(target, BinaryPath)
 
-    # from datetime import datetime
-    # now = datetime.now() # current date and time
-    # date_time = now.strftime("%Y%m%d_%H%M")
-
-    # FingerPrint = "[" + MyName + "|" + str(UNIXtime) + "|" + MyType + "|" + MyFlash + "MB]"
     FingerPrint = "[" + MyName + "|" + str(UNIXtime) + "|" + MyVersion + "|" + MyFlash + "MB]"
-    # FingerPrint = "-=[" + MyName + "|" + MyType + "|" + MyFlash + "MB|" + date_time + "]=-"
 
-    file = open(FinalBIN, 'ab')
+    file = open(BinaryPath, 'ab')
     file.write(bytearray(FingerPrint.encode()))
     file.close()
 
