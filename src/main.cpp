@@ -81,6 +81,8 @@
 #if defined(ETHMODE)
 #include <ETH.h>                    // For networking
 #include <SPI.h>                    // For ethernet
+#include "esp_system.h"
+#include "esp_eth.h"
 #endif
 #endif
 
@@ -840,15 +842,23 @@ void initialiseMqtt(byte * mac)
 
 /*--------------------------- Network -------------------------------*/
 #if defined(MCULILY)
+uint8_t * getEthMacAddress(uint8_t* mac)
+{
+    esp_eth_get_mac(mac);
+    return mac;
+}
+
 void wiFiEvent(WiFiEvent_t event)
 {
+  byte mac[6];
+
   // Log the event to serial for debugging
   switch (event)
   {
     case SYSTEM_EVENT_ETH_START:
       Serial.print(F("[ledc] ethernet started: "));
       Serial.println(ETH.macAddress());
-      sensors.oled(ETH.macAddress());
+      sensors.oled(getEthMacAddress(mac));
       break;
     case SYSTEM_EVENT_ETH_CONNECTED:
       Serial.print(F("[ledc] ethernet connected: "));
@@ -876,8 +886,7 @@ void wiFiEvent(WiFiEvent_t event)
   if (event == SYSTEM_EVENT_ETH_START)
   {
     // Set up MQTT (don't attempt to connect yet)
-    byte mac[6];
-    initialiseMqtt(ETH.macAddress(mac));
+    initialiseMqtt(getEthMacAddress(mac));
 
     // Set up the REST API once we have an IP address
     initialiseRestApi();
