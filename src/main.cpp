@@ -1,27 +1,11 @@
 /**
   PWM LED controller firmware for the Open eXtensible Rack System
-  
-  See https://oxrs.io/docs/hardware/output-devices/pwm-controllers.html for documentation.
-  
-  Compile options:
-    ESP32   (Rack32)     - wifi and ethernet
-    ESP32   (LilyGO POE) - wifi and ethernet
-    ESP8266 (D1 Mini)    - wifi
-    ESP8266 (Room8266)   - wifi and ethernet
-    
-  External dependencies. Install using the Arduino library manager:
-    [PubSubClient](https://github.com/knolleary/pubsubclient)
-    [OXRS-IO-API-ESP32-LIB](https://github.com/OXRS-IO/OXRS-IO-API-ESP32-LIB)
-    [OXRS-IO-MQTT-ESP32-LIB](https://github.com/OXRS-IO/OXRS-IO-MQTT-ESP32-LIB)
-    [OXRS-AC-I2CSensors-ESP-LIB](https://github.com/austinscreations/OXRS-AC-I2CSensors-ESP-LIB)
-    [ledPWM](https://github.com/austinscreations/ledPWM)
-    [WiFiManager](https://github.com/tzapu/WiFiManager)
 
+  Documentation:  
+    https://oxrs.io/docs/hardware/output-devices/pwm-controllers.html
+  
   GitHub repository:
     https://github.com/austinscreations/OXRS-AC-LEDController-ESP-FW
-
-  Bugs/Features:
-    See GitHub issues list
 
   Copyright 2022 Austins Creations
 */
@@ -48,11 +32,9 @@
 //room8266 =  4   5
 //D1 mini  =  4   0
 
-/*--------------------------- Version ---------------------------------*/
-#define FW_NAME       "OXRS-AC-LedController-ESP-FW"
-#define FW_SHORT_NAME "LED Controller"
-#define FW_MAKER      "Austin's Creations"
-#define FW_VERSION    "2.1.0"
+/*--------------------------- Macros ----------------------------------*/
+#define STRINGIFY(s) STRINGIFY1(s)
+#define STRINGIFY1(s) #s
 
 /*--------------------------- Libraries -------------------------------*/
 #include <Arduino.h>
@@ -214,10 +196,10 @@ void getFirmwareJson(JsonVariant json)
 {
   JsonObject firmware = json.createNestedObject("firmware");
 
-  firmware["name"] = FW_NAME;
-  firmware["shortName"] = FW_SHORT_NAME;
-  firmware["maker"] = FW_MAKER;
-  firmware["version"] = FW_VERSION;
+  firmware["name"] = STRINGIFY(FW_NAME);
+  firmware["shortName"] = STRINGIFY(FW_SHORT_NAME);
+  firmware["maker"] = STRINGIFY(FW_MAKER);
+  firmware["version"] = STRINGIFY(FW_VERSION);
 }
 
 void getSystemJson(JsonVariant json)
@@ -283,7 +265,7 @@ void getConfigSchemaJson(JsonVariant json)
   
   // Config schema metadata
   configSchema["$schema"] = JSON_SCHEMA_VERSION;
-  configSchema["title"] = FW_NAME;
+  configSchema["title"] = STRINGIFY(FW_SHORT_NAME);
   configSchema["type"] = "object";
 
   JsonObject properties = configSchema.createNestedObject("properties");
@@ -336,7 +318,7 @@ void getCommandSchemaJson(JsonVariant json)
   
   // Command schema metadata
   commandSchema["$schema"] = JSON_SCHEMA_VERSION;
-  commandSchema["title"] = FW_NAME;
+  commandSchema["title"] = STRINGIFY(FW_SHORT_NAME);
   commandSchema["type"] = "object";
 
   JsonObject properties = commandSchema.createNestedObject("properties");
@@ -1030,6 +1012,21 @@ void initialiseEthernet()
 }
 #endif
 
+void initialiseSerial()
+{
+  Serial.begin(SERIAL_BAUD_RATE);
+  delay(1000);
+  
+  Serial.println(F("[ledc ] starting up..."));
+
+  DynamicJsonDocument json(128);
+  getFirmwareJson(json.as<JsonVariant>());
+
+  Serial.print(F("[ledc ] "));
+  serializeJson(json, Serial);
+  Serial.println();
+}
+
 /*--------------------------- Program -------------------------------*/
 void setup()
 {
@@ -1037,18 +1034,10 @@ void setup()
   // the stack size at runtime (see getStackSize())
   char stack;
   g_stack_start = &stack;
-  
-  // Startup logging to serial
-  Serial.begin(SERIAL_BAUD_RATE);
-  delay(1000);
- 
-  // Dump firmware details to serial
-  Serial.println(F("\n========================================"));
-  Serial.print  (F("FIRMWARE: ")); Serial.println(FW_NAME);
-  Serial.print  (F("MAKER:    ")); Serial.println(FW_MAKER);
-  Serial.print  (F("VERSION:  ")); Serial.println(FW_VERSION);
-  Serial.println(F("========================================"));
-  
+
+  // Set up serial
+  initialiseSerial();  
+
   // Start the I2C bus
   Wire.begin(I2C_SDA, I2C_SCL);
   
