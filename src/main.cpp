@@ -293,7 +293,7 @@ void getConfigSchemaJson(JsonVariant json)
 
   JsonObject count = channelProperties.createNestedObject("count");
   count["type"] = "integer";
-  count["minimum"] = 0;
+  count["minimum"] = 1;
   count["maximum"] = MAX_LED_COUNT;
 
   JsonArray required = channelItems.createNestedArray("required");
@@ -569,7 +569,11 @@ void initialiseStrips(uint8_t controller)
     ledStrip->index = strip;
     ledStrip->channels = 0;
     ledStrip->mode = LED_MODE_NONE;
-    ledStrip->colour[MAX_LED_COUNT] = {};
+
+    for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
+    {
+      ledStrip->colour[colour] = 0;
+    }
     
     ledStrip->lastCrossfade = 0L;
   }
@@ -713,7 +717,11 @@ void jsonChannelConfig(JsonVariant json)
   // set the config for this strip
   ledStrip->channels = count;
   ledStrip->mode = LED_MODE_COLOUR;
-  ledStrip->colour[MAX_LED_COUNT] = {};
+
+  for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
+  {
+    ledStrip->colour[colour] = 0;
+  }
 
   // clear any strip config our new config overwrites
   for (uint8_t i = strip; i < strip + count - 1; i++)
@@ -722,7 +730,11 @@ void jsonChannelConfig(JsonVariant json)
     
     ledStrip->channels = 0;
     ledStrip->mode = LED_MODE_NONE;
-    ledStrip->colour[MAX_LED_COUNT] = {};
+
+    for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
+    {
+      ledStrip->colour[colour] = 0;
+    }
   }
 }
 
