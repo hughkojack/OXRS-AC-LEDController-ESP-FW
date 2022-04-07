@@ -79,7 +79,7 @@
 #define MAX_LED_COUNT               5
 
 // Supported LED modes
-#define LED_MODE_NONE               0
+#define LED_MODE_OFF                0
 #define LED_MODE_COLOUR             1
 #define LED_MODE_FADE               2
 #define LED_MODE_FLASH              3
@@ -447,6 +447,30 @@ void initialisePwmDrivers()
 #endif
 
 /*--------------------------- LED -----------------*/
+void ledOff(PWMDriver * driver, LEDStrip * strip, uint8_t channelOffset)
+{
+  if (strip->channels == 1) 
+  {
+    driver->colour(strip->index, channelOffset, 0);
+  }
+  else if (strip->channels == 2) 
+  {
+    driver->colour(strip->index, channelOffset, 0, 0);
+  }
+  else if (strip->channels == 3) 
+  {
+    driver->colour(strip->index, channelOffset, 0, 0, 0);
+  }
+  else if (strip->channels == 4) 
+  {
+    driver->colour(strip->index, channelOffset, 0, 0, 0, 0);
+  }
+  else if (strip->channels == 5) 
+  {
+    driver->colour(strip->index, channelOffset, 0, 0, 0, 0, 0);
+  }  
+}
+
 void ledColour(PWMDriver * driver, LEDStrip * strip, uint8_t channelOffset)
 {
   if (strip->channels == 1) 
@@ -502,61 +526,14 @@ void ledFade(PWMDriver * driver, LEDStrip * strip, uint8_t channelOffset)
 
 void ledFlash(PWMDriver * driver, LEDStrip * strip, uint8_t channelOffset)
 {
-  if (strip->channels == 1) 
+  if (g_flash_state == HIGH)
   {
-    if (g_flash_state == HIGH)
-    {
-      driver->colour(strip->index, channelOffset, strip->colour[0]);
-    }
-    else
-    {
-      driver->colour(strip->index, channelOffset, 0);
-    }
+    ledColour(driver, strip, channelOffset);
   }
-  else if (strip->channels == 2) 
+  else
   {
-    if (g_flash_state == HIGH)
-    {
-      driver->colour(strip->index, channelOffset, strip->colour[0], strip->colour[1]);
-    }
-    else
-    {
-      driver->colour(strip->index, channelOffset, 0, 0);
-    }
+    ledOff(driver, strip, channelOffset);
   }
-  else if (strip->channels == 3) 
-  {
-    if (g_flash_state == HIGH)
-    {
-      driver->colour(strip->index, channelOffset, strip->colour[0], strip->colour[1], strip->colour[2]);
-    }
-    else
-    {
-      driver->colour(strip->index, channelOffset, 0, 0, 0);
-    }
-  }
-  else if (strip->channels == 4) 
-  {
-    if (g_flash_state == HIGH)
-    {
-      driver->colour(strip->index, channelOffset, strip->colour[0], strip->colour[1], strip->colour[2], strip->colour[3]);
-    }
-    else
-    {
-      driver->colour(strip->index, channelOffset, 0, 0, 0, 0);
-    }
-  }
-  else if (strip->channels == 5) 
-  {
-    if (g_flash_state == HIGH)
-    {
-      driver->colour(strip->index, channelOffset, strip->colour[0], strip->colour[1], strip->colour[2], strip->colour[3], strip->colour[4]);
-    }
-    else
-    {
-      driver->colour(strip->index, channelOffset, 0, 0, 0, 0, 0);
-    }
-  }  
 }
 
 void initialiseStrips(uint8_t controller)
@@ -568,7 +545,7 @@ void initialiseStrips(uint8_t controller)
     // .index is immutable and shouldn't be changed
     ledStrip->index = strip;
     ledStrip->channels = 0;
-    ledStrip->mode = LED_MODE_NONE;
+    ledStrip->mode = LED_MODE_OFF;
 
     for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
     {
@@ -589,7 +566,12 @@ void processStrips(uint8_t controller)
   {
     LEDStrip * ledStrip = &ledStrips[controller][strip];
 
-    if (ledStrip->mode == LED_MODE_COLOUR)
+    if (ledStrip->mode == LED_MODE_OFF)
+    {
+      // off
+      ledOff(driver, ledStrip, channelOffset);
+    }
+    else if (ledStrip->mode == LED_MODE_COLOUR)
     {
       // colour
       ledColour(driver, ledStrip, channelOffset);
@@ -729,7 +711,7 @@ void jsonChannelConfig(JsonVariant json)
     ledStrip = &ledStrips[controller - 1][i];
     
     ledStrip->channels = 0;
-    ledStrip->mode = LED_MODE_NONE;
+    ledStrip->mode = LED_MODE_OFF;
 
     for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
     {
@@ -751,7 +733,11 @@ void jsonChannelCommand(JsonVariant json)
 
   if (json.containsKey("mode"))
   {
-    if (strcmp(json["mode"], "colour") == 0)
+    if (strcmp(json["mode"], "off") == 0)
+    {
+      ledStrip->mode = LED_MODE_OFF;
+    }
+    else if (strcmp(json["mode"], "colour") == 0)
     {
       ledStrip->mode = LED_MODE_COLOUR;
     }
