@@ -239,6 +239,7 @@ void getNetworkJson(JsonVariant json)
   JsonObject network = json.createNestedObject("network");
   
   #if defined(ETHMODE) && defined(MCULILY)
+  network["mode"] = "ethernet";
   network["ip"] = ETH.localIP();
   network["mac"] = ETH.macAddress();
 
@@ -246,9 +247,11 @@ void getNetworkJson(JsonVariant json)
   byte mac[6];
   
   #if defined(ETHMODE)
+  network["mode"] = "ethernet";
   Ethernet.MACAddress(mac);
   network["ip"] = Ethernet.localIP();
   #elif defined(WIFIMODE)
+  network["mode"] = "wifi";
   WiFi.macAddress(mac);
   network["ip"] = WiFi.localIP();
   #endif
