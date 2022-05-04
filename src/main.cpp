@@ -45,6 +45,7 @@
 #include <OXRS_SENSORS.h>           // For QWICC I2C sensors
 #include <ledPWM.h>                 // For PWM LED controller
 #include <WiFiManager.h>            // captive wifi AP config
+#include <MqttLogger.h>             // for mqtt and serial logging
 
 #if defined(MCU32)
 #include <WiFi.h>                   // For networking
@@ -175,6 +176,9 @@ OXRS_MQTT mqtt(mqttClient);
 
 // REST API
 OXRS_API api(mqtt);
+
+// Logging
+MqttLogger logger(mqttClient, "log", MqttLoggerMode::MqttAndSerial);
 
 // I2C sensors
 OXRS_SENSORS sensors(mqtt);
@@ -407,13 +411,13 @@ void initialiseRestApi(void)
 #if defined(PCAMODE)
 void initialisePwmDrivers()
 {
-  Serial.println(F("[ledc] scanning for PWM drivers..."));
+  logger.println(F("[ledc] scanning for PWM drivers..."));
 
   for (uint8_t pca = 0; pca < sizeof(PCA_I2C_ADDRESS); pca++)
   {
-    Serial.print(F(" - 0x"));
-    Serial.print(PCA_I2C_ADDRESS[pca], HEX);
-    Serial.print(F("..."));
+    logger.print(F(" - 0x"));
+    logger.print(PCA_I2C_ADDRESS[pca], HEX);
+    logger.print(F("..."));
 
     // Check if there is anything responding on this address
     Wire.beginTransmission(PCA_I2C_ADDRESS[pca]);
@@ -424,11 +428,11 @@ void initialisePwmDrivers()
       // Initialise the PCA9685 driver for this address
       pwmDriver[pca].begin_i2c(PCA_I2C_ADDRESS[pca]);
 
-      Serial.println(F("PCA9685"));
+      logger.println(F("PCA9685"));
     }
     else
     {
-      Serial.println(F("empty"));
+      logger.println(F("empty"));
     }
   }
 }
@@ -598,12 +602,17 @@ void processStrips(uint8_t controller)
 /*--------------------------- MQTT/API -----------------*/
 void mqttConnected() 
 {
+  // MqttLogger doesn't copy the logging topic to an internal
+  // buffer so we have to use a static array here
+  static char logTopic[64];
+  logger.setTopic(mqtt.getLogTopic(logTopic));
+
   // Publish device adoption info
   DynamicJsonDocument json(JSON_ADOPT_MAX_SIZE);
   mqtt.publishAdopt(api.getAdopt(json.as<JsonVariant>()));
 
   // Log the fact we are now connected
-  Serial.println("[ledc] mqtt connected");
+  logger.println("[ledc] mqtt connected");
 }
 
 void mqttDisconnected(int state) 
@@ -613,31 +622,31 @@ void mqttDisconnected(int state)
   switch (state)
   {
     case MQTT_CONNECTION_TIMEOUT:
-      Serial.println(F("[ledc] mqtt connection timeout"));
+      logger.println(F("[ledc] mqtt connection timeout"));
       break;
     case MQTT_CONNECTION_LOST:
-      Serial.println(F("[ledc] mqtt connection lost"));
+      logger.println(F("[ledc] mqtt connection lost"));
       break;
     case MQTT_CONNECT_FAILED:
-      Serial.println(F("[ledc] mqtt connect failed"));
+      logger.println(F("[ledc] mqtt connect failed"));
       break;
     case MQTT_DISCONNECTED:
-      Serial.println(F("[ledc] mqtt disconnected"));
+      logger.println(F("[ledc] mqtt disconnected"));
       break;
     case MQTT_CONNECT_BAD_PROTOCOL:
-      Serial.println(F("[ledc] mqtt bad protocol"));
+      logger.println(F("[ledc] mqtt bad protocol"));
       break;
     case MQTT_CONNECT_BAD_CLIENT_ID:
-      Serial.println(F("[ledc] mqtt bad client id"));
+      logger.println(F("[ledc] mqtt bad client id"));
       break;
     case MQTT_CONNECT_UNAVAILABLE:
-      Serial.println(F("[ledc] mqtt unavailable"));
+      logger.println(F("[ledc] mqtt unavailable"));
       break;
     case MQTT_CONNECT_BAD_CREDENTIALS:
-      Serial.println(F("[ledc] mqtt bad credentials"));
+      logger.println(F("[ledc] mqtt bad credentials"));
       break;      
     case MQTT_CONNECT_UNAUTHORIZED:
-      Serial.println(F("[ledc] mqtt unauthorised"));
+      logger.println(F("[ledc] mqtt unauthorised"));
       break;      
   }
 }
@@ -650,7 +659,7 @@ uint8_t getController(JsonVariant json)
   
   if (!json.containsKey("controller"))
   {
-    Serial.println(F("[ledc] missing controller"));
+    logger.println(F("[ledc] missing controller"));
     return 0;
   }
   
@@ -659,7 +668,7 @@ uint8_t getController(JsonVariant json)
   // Check the controller is valid for this device
   if (controller <= 0 || controller > PWM_CONTROLLER_COUNT)
   {
-    Serial.println(F("[ledc] invalid controller"));
+    logger.println(F("[ledc] invalid controller"));
     return 0;
   }
 
@@ -670,7 +679,7 @@ uint8_t getStrip(JsonVariant json)
 {
   if (!json.containsKey("strip"))
   {
-    Serial.println(F("[ledc] missing strip"));
+    logger.println(F("[ledc] missing strip"));
     return 0;
   }
   
@@ -679,7 +688,7 @@ uint8_t getStrip(JsonVariant json)
   // Check the strip is valid for this device
   if (strip <= 0 || strip > PWM_CHANNEL_COUNT)
   {
-    Serial.println(F("[ledc] invalid strip"));
+    logger.println(F("[ledc] invalid strip"));
     return 0;
   }
 
@@ -754,7 +763,7 @@ void jsonChannelCommand(JsonVariant json)
     }
     else 
     {
-      Serial.println(F("[ledc] invalid mode"));
+      logger.println(F("[ledc] invalid mode"));
     }
   }
 
@@ -852,27 +861,27 @@ void wiFiEvent(WiFiEvent_t event)
   switch (event)
   {
     case SYSTEM_EVENT_ETH_START:
-      Serial.print(F("[ledc] ethernet started: "));
-      Serial.println(ETH.macAddress());
+      logger.print(F("[ledc] ethernet started: "));
+      logger.println(ETH.macAddress());
       sensors.oled(getEthMacAddress(mac));
       break;
     case SYSTEM_EVENT_ETH_CONNECTED:
-      Serial.print(F("[ledc] ethernet connected: "));
-      if (ETH.fullDuplex()) { Serial.print(F("full duplex ")); }
-      Serial.print(F("@ "));
-      Serial.print(ETH.linkSpeed());
-      Serial.println(F("mbps"));
+      logger.print(F("[ledc] ethernet connected: "));
+      if (ETH.fullDuplex()) { logger.print(F("full duplex ")); }
+      logger.print(F("@ "));
+      logger.print(ETH.linkSpeed());
+      logger.println(F("mbps"));
       break;
     case SYSTEM_EVENT_ETH_GOT_IP:
-      Serial.print(F("[ledc] ip assigned: "));
-      Serial.println(ETH.localIP());
+      logger.print(F("[ledc] ip assigned: "));
+      logger.println(ETH.localIP());
       sensors.oled(ETH.localIP());
       break;
     case SYSTEM_EVENT_ETH_DISCONNECTED:
-      Serial.println(F("[ledc] ethernet disconnected"));
+      logger.println(F("[ledc] ethernet disconnected"));
       break;
     case SYSTEM_EVENT_ETH_STOP:
-      Serial.println(F("[ledc] ethernet stopped"));
+      logger.println(F("[ledc] ethernet stopped"));
       break;
     default:
       break;
@@ -903,8 +912,8 @@ void initialiseWifi()
   // Display the MAC address on serial
   char mac_display[18];
   sprintf_P(mac_display, PSTR("%02X:%02X:%02X:%02X:%02X:%02X"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.print(F("[ledc] mac address: "));
-  Serial.println(mac_display);
+  logger.print(F("[ledc] mac address: "));
+  logger.println(mac_display);
 
   // Update OLED display
   sensors.oled(mac);
@@ -919,8 +928,8 @@ void initialiseWifi()
   }
 
   // Display IP address on serial
-  Serial.print(F("[ledc] ip address: "));
-  Serial.println(WiFi.localIP());
+  logger.print(F("[ledc] ip address: "));
+  logger.println(WiFi.localIP());
 
   // Update OLED display
   sensors.oled(Ethernet.localIP());
@@ -965,8 +974,8 @@ void initialiseEthernet()
   // Display the MAC address on serial
   char mac_display[18];
   sprintf_P(mac_display, PSTR("%02X:%02X:%02X:%02X:%02X:%02X"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.print(F("[ledc] mac address: "));
-  Serial.println(mac_display);
+  logger.print(F("[ledc] mac address: "));
+  logger.println(mac_display);
 
   // Update OLED display
   sensors.oled(mac);
@@ -984,21 +993,21 @@ void initialiseEthernet()
   delay(350);
 
   // Get an IP address via DHCP
-  Serial.print(F("[ledc] ip address: "));
+  logger.print(F("[ledc] ip address: "));
   if (!Ethernet.begin(mac, DHCP_TIMEOUT_MS, DHCP_RESPONSE_TIMEOUT_MS))
   {
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-      Serial.println(F("ethernet shield not found"));
+      logger.println(F("ethernet shield not found"));
     } else if (Ethernet.linkStatus() == LinkOFF) {
-      Serial.println(F("ethernet cable not connected"));
+      logger.println(F("ethernet cable not connected"));
     } else {
-      Serial.println(F("failed to setup ethernet using DHCP"));
+      logger.println(F("failed to setup ethernet using DHCP"));
     }
     return;
   }
   
   // Display IP address on serial
-  Serial.println(Ethernet.localIP());
+  logger.println(Ethernet.localIP());
 
   // Update OLED display
   sensors.oled(Ethernet.localIP());
@@ -1018,14 +1027,14 @@ void initialiseSerial()
   Serial.begin(SERIAL_BAUD_RATE);
   delay(1000);
   
-  Serial.println(F("[ledc ] starting up..."));
+  logger.println(F("[ledc ] starting up..."));
 
   DynamicJsonDocument json(128);
   getFirmwareJson(json.as<JsonVariant>());
 
-  Serial.print(F("[ledc ] "));
-  serializeJson(json, Serial);
-  Serial.println();
+  logger.print(F("[ledc ] "));
+  serializeJson(json, logger);
+  logger.println();
 }
 
 /*--------------------------- Program -------------------------------*/
