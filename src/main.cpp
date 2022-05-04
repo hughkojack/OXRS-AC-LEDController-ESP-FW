@@ -279,6 +279,7 @@ void getConfigSchemaJson(JsonVariant json)
 
   JsonObject channels = properties.createNestedObject("channels");
   channels["type"] = "array";
+  channels["description"] = "Used to tell the controller what strips are connected where";
   
   JsonObject channelItems = channels.createNestedObject("items");
   channelItems["type"] = "object";
@@ -291,17 +292,20 @@ void getConfigSchemaJson(JsonVariant json)
     controller["type"] = "integer";
     controller["minimum"] = 1;
     controller["maximum"] = PWM_CONTROLLER_COUNT;
+    controller["description"] = "Specifies the PCA controller being declared - where the strip will be attached";
   }
   
   JsonObject strip = channelProperties.createNestedObject("strip");
   strip["type"] = "integer";
   strip["minimum"] = 1;
   strip["maximum"] = PWM_CHANNEL_COUNT;
+  strip["description"] = "Assigns a number designator to a strip - in order they are wired.";
 
   JsonObject count = channelProperties.createNestedObject("count");
   count["type"] = "integer";
   count["minimum"] = 1;
   count["maximum"] = MAX_LED_COUNT;
+  count["description"] = "Number of channels that the strip uses";
 
   JsonArray required = channelItems.createNestedArray("required");
   if (PWM_CONTROLLER_COUNT > 1)
@@ -314,6 +318,7 @@ void getConfigSchemaJson(JsonVariant json)
   JsonObject fadeIntervalUs = properties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
   fadeIntervalUs["minimum"] = 0;
+  fadeIntervalUs["description"] = "The rate for fade to work in Millis - default is 500ms";
 
   // Add any sensor config
   sensors.setConfigSchema(properties);
@@ -332,6 +337,7 @@ void getCommandSchemaJson(JsonVariant json)
   
   JsonObject channels = properties.createNestedObject("channels");
   channels["type"] = "array";
+  channels["description"] = "Used to control a specified strip";
   
   JsonObject channelItems = channels.createNestedObject("items");
   channelItems["type"] = "object";
@@ -344,15 +350,18 @@ void getCommandSchemaJson(JsonVariant json)
     controller["type"] = "integer";
     controller["minimum"] = 1;
     controller["maximum"] = PWM_CONTROLLER_COUNT;
+    controller["description"] = "Specify which PCA controlelr the strip is attached";
   }
 
   JsonObject strip = channelProperties.createNestedObject("strip");
   strip["type"] = "integer";
   strip["minimum"] = 1;
   strip["maximum"] = PWM_CHANNEL_COUNT;
+  strip["description"] = "What strip do we want to controller";
 
   JsonObject mode = channelProperties.createNestedObject("mode");
   mode["type"] = "string";
+  mode["description"] = "Select a mode for the strip to be in - color sets a static color, and the strip will change right away, Fade will have the strip change to the designed color within the programmed fade speed set in config, flash will have the strip turn on and off with the rate being controlled via mqtt message";
   JsonArray modeEnum = mode.createNestedArray("enum");
   modeEnum.add("colour");
   modeEnum.add("fade");
@@ -360,10 +369,13 @@ void getCommandSchemaJson(JsonVariant json)
 
   JsonObject colour = channelProperties.createNestedObject("colour");
   colour["type"] = "array";
+  colour["description"] = "Sets the brightness value for a channel --- 0-255 possible";
   colour["minItems"] = 1;
   colour["maxItems"] = MAX_LED_COUNT;
   JsonObject colourItems = colour.createNestedObject("items");
   colourItems["type"] = "integer";
+  colourItems["minimum"] = 0;
+  colourItems["maximum"] = 255;
 
   JsonArray required = channelItems.createNestedArray("required");
   if (PWM_CONTROLLER_COUNT > 1)
@@ -374,9 +386,11 @@ void getCommandSchemaJson(JsonVariant json)
 
   JsonObject flash = properties.createNestedObject("flash");
   flash["type"] = "boolean";
+  flash["description"] = "used to set the speed of flashing mode and allows multiple controllers to be synced via the network";
 
   JsonObject restart = properties.createNestedObject("restart");
   restart["type"] = "boolean";
+  restart["description"] = "Reboots the MCU";
 
   // Add any sensor commands
   sensors.setCommandSchema(properties);
