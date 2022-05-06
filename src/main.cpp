@@ -371,7 +371,6 @@ void getCommandSchemaJson(JsonVariant json)
   JsonObject fadeIntervalUs = channelProperties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
   fadeIntervalUs["minimum"] = 0;
-  fadeIntervalUs["description"] = "Time to fade from off -> on (or vice versa), in microseconds (defaults to 500us)";
 
   JsonArray required = channelItems.createNestedArray("required");
   if (PWM_CONTROLLER_COUNT > 1)
