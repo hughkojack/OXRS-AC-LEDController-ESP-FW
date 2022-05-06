@@ -275,6 +275,7 @@ void getConfigSchemaJson(JsonVariant json)
 
   JsonObject channels = properties.createNestedObject("channels");
   channels["type"] = "array";
+  channels["description"] = "Define what strips are connected where";
   
   JsonObject channelItems = channels.createNestedObject("items");
   channelItems["type"] = "object";
@@ -287,17 +288,20 @@ void getConfigSchemaJson(JsonVariant json)
     controller["type"] = "integer";
     controller["minimum"] = 1;
     controller["maximum"] = PWM_CONTROLLER_COUNT;
+    controller["description"] = "The index of the PCA controller this strip is connected to";
   }
   
   JsonObject strip = channelProperties.createNestedObject("strip");
   strip["type"] = "integer";
   strip["minimum"] = 1;
   strip["maximum"] = PWM_CHANNEL_COUNT;
+  strip["description"] = "Assigns an index to the strip, incrementing from 1, in the order it is wired to the controller";
 
   JsonObject count = channelProperties.createNestedObject("count");
   count["type"] = "integer";
   count["minimum"] = 1;
   count["maximum"] = MAX_LED_COUNT;
+  count["description"] = "Number of channels that the strip uses";
 
   JsonArray required = channelItems.createNestedArray("required");
   if (PWM_CONTROLLER_COUNT > 1)
@@ -310,6 +314,7 @@ void getConfigSchemaJson(JsonVariant json)
   JsonObject fadeIntervalUs = properties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
   fadeIntervalUs["minimum"] = 0;
+  fadeIntervalUs["description"] = "Default time to fade from off -> on (and vice versa), in microseconds (defaults to 500us)";
 
   // Add any sensor config
   sensors.setConfigSchema(properties);
@@ -328,6 +333,7 @@ void getCommandSchemaJson(JsonVariant json)
   
   JsonObject channels = properties.createNestedObject("channels");
   channels["type"] = "array";
+  channels["description"] = "Set the levels for each channel on a specified strip. Strip is identified by the index defined when configuring the controller. Levels are a value between 0-255. Optionally set a fade interval for this command, otherwise uses the controller fade interval (defaults to 500us).";
   
   JsonObject channelItems = channels.createNestedObject("items");
   channelItems["type"] = "object";
@@ -359,6 +365,8 @@ void getCommandSchemaJson(JsonVariant json)
   colour["maxItems"] = MAX_LED_COUNT;
   JsonObject colourItems = colour.createNestedObject("items");
   colourItems["type"] = "integer";
+  colourItems["minimum"] = 0;
+  colourItems["maximum"] = 255;
 
   JsonObject fadeIntervalUs = channelProperties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
@@ -373,6 +381,7 @@ void getCommandSchemaJson(JsonVariant json)
 
   JsonObject restart = properties.createNestedObject("restart");
   restart["type"] = "boolean";
+  restart["description"] = "Restart the controller";
 
   // Add any sensor commands
   sensors.setCommandSchema(properties);
