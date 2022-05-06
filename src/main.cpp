@@ -275,7 +275,7 @@ void getConfigSchemaJson(JsonVariant json)
 
   JsonObject channels = properties.createNestedObject("channels");
   channels["type"] = "array";
-  channels["description"] = "Used to tell the controller what strips are connected where";
+  channels["description"] = "Define what strips are connected where";
   
   JsonObject channelItems = channels.createNestedObject("items");
   channelItems["type"] = "object";
@@ -288,7 +288,7 @@ void getConfigSchemaJson(JsonVariant json)
     controller["type"] = "integer";
     controller["minimum"] = 1;
     controller["maximum"] = PWM_CONTROLLER_COUNT;
-    controller["description"] = "Specifies the PCA controller being declared - where the strip will be attached";
+    controller["description"] = "The index of the PCA controller this strip is connected to";
   }
   
   JsonObject strip = channelProperties.createNestedObject("strip");
@@ -314,7 +314,7 @@ void getConfigSchemaJson(JsonVariant json)
   JsonObject fadeIntervalUs = properties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
   fadeIntervalUs["minimum"] = 0;
-  fadeIntervalUs["description"] = "Global variable applied to all strips - Time to fade from off to on, or vice versa, in milliseconds (default is 500ms)";
+  fadeIntervalUs["description"] = "Default time to fade from off -> on (and vice versa), in microseconds (defaults to 500us)";
 
   // Add any sensor config
   sensors.setConfigSchema(properties);
@@ -333,7 +333,7 @@ void getCommandSchemaJson(JsonVariant json)
   
   JsonObject channels = properties.createNestedObject("channels");
   channels["type"] = "array";
-  channels["description"] = "Used to control a specified strip";
+  channels["description"] = "Set the levels for each channel on a specified strip. Strip is identified by the index defined when configuring the controller. Levels are a value between 0-255. Optionally set a fade interval for this command, otherwise uses the controller fade interval (defaults to 500us).";
   
   JsonObject channelItems = channels.createNestedObject("items");
   channelItems["type"] = "object";
@@ -346,14 +346,12 @@ void getCommandSchemaJson(JsonVariant json)
     controller["type"] = "integer";
     controller["minimum"] = 1;
     controller["maximum"] = PWM_CONTROLLER_COUNT;
-    controller["description"] = "Specify which PCA controller the strip is attached";
   }
 
   JsonObject strip = channelProperties.createNestedObject("strip");
   strip["type"] = "integer";
   strip["minimum"] = 1;
   strip["maximum"] = PWM_CHANNEL_COUNT;
-  strip["description"] = "What strip do we want to control";
 
   JsonObject state = channelProperties.createNestedObject("state");
   state["type"] = "string";
@@ -363,7 +361,6 @@ void getCommandSchemaJson(JsonVariant json)
 
   JsonObject colour = channelProperties.createNestedObject("colour");
   colour["type"] = "array";
-  colour["description"] = "Set the brightness for each channel (value between 0 - 255)";
   colour["minItems"] = 1;
   colour["maxItems"] = MAX_LED_COUNT;
   JsonObject colourItems = colour.createNestedObject("items");
@@ -374,7 +371,7 @@ void getCommandSchemaJson(JsonVariant json)
   JsonObject fadeIntervalUs = channelProperties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
   fadeIntervalUs["minimum"] = 0;
-  fadeIntervalUs["description"] = "Time to fade from off to on, or vice versa, in milliseconds (default is 500ms)";
+  fadeIntervalUs["description"] = "Time to fade from off -> on (or vice versa), in microseconds (defaults to 500us)";
 
   JsonArray required = channelItems.createNestedArray("required");
   if (PWM_CONTROLLER_COUNT > 1)
