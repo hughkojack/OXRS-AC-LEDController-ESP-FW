@@ -49,6 +49,10 @@
 
 #if defined(MCU32)
 #include <WiFi.h>                   // For networking
+#if defined(ETHMODE)
+#include <Ethernet.h>               // For networking
+#include <SPI.h>                    // For ethernet
+#endif
 #endif
 
 #if defined(MCU8266)
@@ -867,7 +871,7 @@ void initialiseWifi()
   logger.println(WiFi.localIP());
 
   // Update OLED display
-  sensors.oled(Ethernet.localIP());
+  sensors.oled(WiFi.localIP());
 
   // Set up MQTT (don't attempt to connect yet)
   initialiseMqtt(mac);
@@ -1015,17 +1019,17 @@ void loop()
   mqtt.loop();
 
   // Maintain DHCP lease
-  #if defined(ETHMODE)
+  #if defined(ETHMODE) && not defined(MCULILY)
   Ethernet.maintain();
   #endif
   
   // Handle any API requests
   #if defined(WIFIMODE) || defined(MCULILY)
   WiFiClient client = server.available();
-  api.checkWifi(&client);
+  api.loop(&client);
   #elif defined(ETHMODE)
   EthernetClient client = server.available();
-  api.checkEthernet(&client);
+  api.loop(&client);
   #endif
 
   // Iterate through each PWM controller
