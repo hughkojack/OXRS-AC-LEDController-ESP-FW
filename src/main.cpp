@@ -783,46 +783,6 @@ void initialiseMqtt(byte * mac)
 }
 
 /*--------------------------- Network -------------------------------*/
-#if defined(MCULILY)
-void wiFiEvent(WiFiEvent_t event)
-{
-  // Log the event to serial for debugging
-  switch (event)
-  {
-    case ARDUINO_EVENT_ETH_START:
-      // Get the ethernet MAC address
-      byte mac[6];
-      ETH.macAddress(mac);
-
-      // Display the MAC address on serial
-      char mac_display[18];
-      sprintf_P(mac_display, PSTR("%02X:%02X:%02X:%02X:%02X:%02X"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-      logger.print(F("[ledc] mac address: "));
-      logger.println(mac_display);
-
-      // Update OLED display
-      sensors.oled(mac);
-
-      // Set up MQTT (don't attempt to connect yet)
-      initialiseMqtt(mac);
-      break;
-    case ARDUINO_EVENT_ETH_GOT_IP:
-      // Get the IP address assigned by DHCP
-      IPAddress ip = ETH.localIP();
-
-      logger.print(F("[ledc] ip address: "));
-      logger.println(ip);
-
-      // Update OLED display
-      sensors.oled(ip);
-      
-      // Set up the REST API once we have an IP address
-      initialiseRestApi();
-      break;
-  }
-}
-#endif
-
 #if defined(WIFIMODE)
 void initialiseWifi()
 {
@@ -867,11 +827,51 @@ void initialiseWifi()
 #endif
 
 #if defined(ETHMODE)
+#if defined(MCULILY)
+void ethernetEvent(WiFiEvent_t event)
+{
+  // Log the event to serial for debugging
+  switch (event)
+  {
+    case ARDUINO_EVENT_ETH_START:
+      // Get the ethernet MAC address
+      byte mac[6];
+      ETH.macAddress(mac);
+
+      // Display the MAC address on serial
+      char mac_display[18];
+      sprintf_P(mac_display, PSTR("%02X:%02X:%02X:%02X:%02X:%02X"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      logger.print(F("[ledc] mac address: "));
+      logger.println(mac_display);
+
+      // Update OLED display
+      sensors.oled(mac);
+
+      // Set up MQTT (don't attempt to connect yet)
+      initialiseMqtt(mac);
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP:
+      // Get the IP address assigned by DHCP
+      IPAddress ip = ETH.localIP();
+
+      logger.print(F("[ledc] ip address: "));
+      logger.println(ip);
+
+      // Update OLED display
+      sensors.oled(ip);
+      
+      // Set up the REST API once we have an IP address
+      initialiseRestApi();
+      break;
+  }
+}
+#endif
+
 void initialiseEthernet()
 {
   #if defined(MCULILY)
   // We continue initialisation inside this event handler
-  WiFi.onEvent(wiFiEvent);
+  WiFi.onEvent(ethernetEvent);
 
   // Reset the Ethernet PHY
   pinMode(ETH_RST_PIN, OUTPUT);
