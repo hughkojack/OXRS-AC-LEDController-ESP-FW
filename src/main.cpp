@@ -68,8 +68,6 @@
 #if defined(ETHMODE)
 #include <ETH.h>                    // For networking
 #include <SPI.h>                    // For ethernet
-#include "esp_system.h"
-#include "esp_eth.h"
 #endif
 #endif
 
@@ -786,54 +784,41 @@ void initialiseMqtt(byte * mac)
 
 /*--------------------------- Network -------------------------------*/
 #if defined(MCULILY)
-uint8_t * getEthMacAddress(uint8_t* mac)
-{
-    esp_eth_get_mac(mac);
-    return mac;
-}
-
 void wiFiEvent(WiFiEvent_t event)
 {
-  byte mac[6];
-
   // Log the event to serial for debugging
   switch (event)
   {
-    case SYSTEM_EVENT_ETH_START:
-      logger.print(F("[ledc] ethernet started: "));
-      logger.println(ETH.macAddress());
-      sensors.oled(getEthMacAddress(mac));
-      break;
-    case SYSTEM_EVENT_ETH_CONNECTED:
-      logger.print(F("[ledc] ethernet connected: "));
-      if (ETH.fullDuplex()) { logger.print(F("full duplex ")); }
-      logger.print(F("@ "));
-      logger.print(ETH.linkSpeed());
-      logger.println(F("mbps"));
-      break;
-    case SYSTEM_EVENT_ETH_GOT_IP:
-      logger.print(F("[ledc] ip assigned: "));
-      logger.println(ETH.localIP());
-      sensors.oled(ETH.localIP());
-      break;
-    case SYSTEM_EVENT_ETH_DISCONNECTED:
-      logger.println(F("[ledc] ethernet disconnected"));
-      break;
-    case SYSTEM_EVENT_ETH_STOP:
-      logger.println(F("[ledc] ethernet stopped"));
-      break;
-    default:
-      break;
-  }
+    case ARDUINO_EVENT_ETH_START:
+      // Get the ethernet MAC address
+      byte mac[6];
+      ETH.macAddress(mac);
 
-  // Once our ethernet controller has started continue initialisation
-  if (event == SYSTEM_EVENT_ETH_START)
-  {
-    // Set up MQTT (don't attempt to connect yet)
-    initialiseMqtt(getEthMacAddress(mac));
+      // Display the MAC address on serial
+      char mac_display[18];
+      sprintf_P(mac_display, PSTR("%02X:%02X:%02X:%02X:%02X:%02X"), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      logger.print(F("[ledc] mac address: "));
+      logger.println(mac_display);
 
-    // Set up the REST API once we have an IP address
-    initialiseRestApi();
+      // Update OLED display
+      sensors.oled(mac);
+
+      // Set up MQTT (don't attempt to connect yet)
+      initialiseMqtt(mac);
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP:
+      // Get the IP address assigned by DHCP
+      IPAddress ip = ETH.localIP();
+
+      logger.print(F("[ledc] ip address: "));
+      logger.println(ip);
+
+      // Update OLED display
+      sensors.oled(ip);
+      
+      // Set up the REST API once we have an IP address
+      initialiseRestApi();
+      break;
   }
 }
 #endif
