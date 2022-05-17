@@ -198,10 +198,14 @@ void getFirmwareJson(JsonVariant json)
 {
   JsonObject firmware = json.createNestedObject("firmware");
 
-  firmware["name"] = STRINGIFY(FW_NAME);
-  firmware["shortName"] = STRINGIFY(FW_SHORT_NAME);
-  firmware["maker"] = STRINGIFY(FW_MAKER);
+  firmware["name"] = FW_NAME;
+  firmware["shortName"] = FW_SHORT_NAME;
+  firmware["maker"] = FW_MAKER;
   firmware["version"] = STRINGIFY(FW_VERSION);
+
+#if defined(FW_GITHUB_URL)
+  firmware["githubUrl"] = FW_GITHUB_URL;
+#endif
 }
 
 void getSystemJson(JsonVariant json)
@@ -270,7 +274,7 @@ void getConfigSchemaJson(JsonVariant json)
   
   // Config schema metadata
   configSchema["$schema"] = JSON_SCHEMA_VERSION;
-  configSchema["title"] = STRINGIFY(FW_SHORT_NAME);
+  configSchema["title"] = FW_SHORT_NAME;
   configSchema["type"] = "object";
 
   JsonObject properties = configSchema.createNestedObject("properties");
@@ -328,7 +332,7 @@ void getCommandSchemaJson(JsonVariant json)
   
   // Command schema metadata
   commandSchema["$schema"] = JSON_SCHEMA_VERSION;
-  commandSchema["title"] = STRINGIFY(FW_SHORT_NAME);
+  commandSchema["title"] = FW_SHORT_NAME;
   commandSchema["type"] = "object";
 
   JsonObject properties = commandSchema.createNestedObject("properties");
