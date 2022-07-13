@@ -385,10 +385,6 @@ void getCommandSchemaJson(JsonVariant json)
   }
   required.add("strip");
 
-  JsonObject restart = properties.createNestedObject("restart");
-  restart["type"] = "boolean";
-  restart["description"] = "Restart the controller";
-
   // Add any sensor commands
   sensors.setCommandSchema(properties);
 }
@@ -733,11 +729,6 @@ void jsonCommand(JsonVariant json)
     {
       jsonChannelCommand(channel);
     }
-  }
-
-  if (json.containsKey("restart") && json["restart"].as<bool>())
-  {
-    ESP.restart();
   }
 
   // Let the sensors handle any commands
