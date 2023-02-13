@@ -46,6 +46,7 @@
 #include <ledPWM.h>                 // For PWM LED controller
 #include <WiFiManager.h>            // captive wifi AP config
 #include <MqttLogger.h>             // for mqtt and serial logging
+#include <LittleFS.h>               // For file system access
 
 #if defined(MCU32)
 #include <WiFi.h>                   // For networking
@@ -69,6 +70,12 @@
 #include <ETH.h>                    // For networking
 #include <SPI.h>                    // For ethernet
 #endif
+#endif
+
+// LCD screen
+#if defined(RACK32)
+#include <OXRS_LCD.h>               // For LCD runtime displays
+#include "logo.h"                   // Embedded maker logo
 #endif
 
 /*--------------------------- Constants ----------------------------------*/
@@ -152,13 +159,19 @@ uint32_t g_fade_interval_us = DEFAULT_FADE_INTERVAL_US;
 // stack size counter (for determine used heap size on ESP8266)
 char * g_stack_start;
 
+// updateintervall for temp display on screen
+uint32_t _tempUpdateMs = 0;
+
+// timer for temp display on screen
+uint32_t _lastTempUpdate = 0;
+
 /*--------------------------- Instantiate Global Objects -----------------*/
 #if defined(ETHMODE)
 #if defined(MCU8266) || defined(MCU32)
-EthernetClient client;
+    EthernetClient client;
 EthernetServer server(REST_API_PORT);
 #elif defined(MCULILY)
-WiFiClient client;
+    WiFiClient client;
 WiFiServer server(REST_API_PORT);
 #endif
 #endif
@@ -186,6 +199,15 @@ PWMDriver pwmDriver[PWM_CONTROLLER_COUNT];
 
 // LED strip config (allow for a max of all single LED strips)
 LEDStrip ledStrips[PWM_CONTROLLER_COUNT][PWM_CHANNEL_COUNT];
+
+// LCD screen
+#if defined(RACK32)
+  #if defined(WIFIMODE)
+  OXRS_LCD _screen(WiFi, mqtt);
+  #else
+  OXRS_LCD _screen(Ethernet, mqtt);
+  #endif
+#endif
 
 /*--------------------------- JSON builders -----------------*/
 uint32_t getStackSize()
@@ -228,8 +250,8 @@ void getSystemJson(JsonVariant json)
   system["sketchSpaceTotalBytes"] = ESP.getFreeSketchSpace();
 
   #if defined(MCU32) || defined(MCULILY)
-  system["fileSystemUsedBytes"] = SPIFFS.usedBytes();
-  system["fileSystemTotalBytes"] = SPIFFS.totalBytes();
+  system["fileSystemUsedBytes"] = LittleFS.usedBytes();
+  system["fileSystemTotalBytes"] = LittleFS.totalBytes();
 
   #elif defined(MCU8266)
   FSInfo fsInfo;
@@ -316,6 +338,37 @@ void getConfigSchemaJson(JsonVariant json)
   }
   required.add("strip");
   required.add("count");
+
+  #if defined(RACK32)
+  // LCD config
+  JsonObject activeBrightnessPercent = properties.createNestedObject("activeBrightnessPercent");
+  activeBrightnessPercent["title"] = "LCD Active Brightness (%)";
+  activeBrightnessPercent["description"] = "Brightness of the LCD when active (defaults to 100%). Must be a number between 0 and 100.";
+  activeBrightnessPercent["type"] = "integer";
+  activeBrightnessPercent["minimum"] = 0;
+  activeBrightnessPercent["maximum"] = 100;
+
+  JsonObject inactiveBrightnessPercent = properties.createNestedObject("inactiveBrightnessPercent");
+  inactiveBrightnessPercent["title"] = "LCD Inactive Brightness (%)";
+  inactiveBrightnessPercent["description"] = "Brightness of the LCD when in-active (defaults to 10%). Must be a number between 0 and 100.";
+  inactiveBrightnessPercent["type"] = "integer";
+  inactiveBrightnessPercent["minimum"] = 0;
+  inactiveBrightnessPercent["maximum"] = 100;
+
+  JsonObject activeDisplaySeconds = properties.createNestedObject("activeDisplaySeconds");
+  activeDisplaySeconds["title"] = "LCD Active Display Timeout (seconds)";
+  activeDisplaySeconds["description"] = "How long the LCD remains 'active' after an event is detected (defaults to 10 seconds, setting to 0 disables the timeout). Must be a number between 0 and 600 (i.e. 10 minutes).";
+  activeDisplaySeconds["type"] = "integer";
+  activeDisplaySeconds["minimum"] = 0;
+  activeDisplaySeconds["maximum"] = 600;
+
+  JsonObject eventDisplaySeconds = properties.createNestedObject("eventDisplaySeconds");
+  eventDisplaySeconds["title"] = "LCD Event Display Timeout (seconds)";
+  eventDisplaySeconds["description"] = "How long the last event is displayed on the LCD (defaults to 3 seconds, setting to 0 disables the timeout). Must be a number between 0 and 600 (i.e. 10 minutes).";
+  eventDisplaySeconds["type"] = "integer";
+  eventDisplaySeconds["minimum"] = 0;
+  eventDisplaySeconds["maximum"] = 600;
+#endif
 
   JsonObject fadeIntervalUs = properties.createNestedObject("fadeIntervalUs");
   fadeIntervalUs["type"] = "integer";
@@ -519,14 +572,15 @@ void processStrips(uint8_t controller)
 {
   uint8_t OFF[MAX_LED_COUNT];
   memset(OFF, 0, sizeof(OFF));
+  uint16_t pcaState = 0x0;
 
-  PWMDriver * driver = &pwmDriver[controller];
+  PWMDriver *driver = &pwmDriver[controller];
 
   uint8_t channelOffset = 0;
 
   for (uint8_t strip = 0; strip < PWM_CHANNEL_COUNT; strip++)
   {
-    LEDStrip * ledStrip = &ledStrips[controller][strip];
+    LEDStrip *ledStrip = &ledStrips[controller][strip];
 
     if (ledStrip->state == LED_STATE_OFF)
     {
@@ -539,9 +593,26 @@ void processStrips(uint8_t controller)
       ledFade(driver, ledStrip, channelOffset, ledStrip->colour);
     }
 
+    #if defined(RACK32)
+    // create bitfield of PCA status for screen display
+    for (int ch = 0; ch < ledStrip->channels; ch++)
+    {
+      if ((ledStrip->state == LED_STATE_ON))
+      {
+        if (ledStrip->colour[ch] > 0)
+          bitSet(pcaState, channelOffset + ch);
+      }
+    }
+    #endif
+
     // increase offset
     channelOffset += ledStrip->channels;
   }
+
+  #if defined(RACK32)
+  // update port visualisation on screen
+  _screen.process(controller, pcaState);
+  #endif
 }
 
 /*--------------------------- MQTT/API -----------------*/
@@ -723,6 +794,21 @@ void jsonChannelCommand(JsonVariant json)
   {
     ledStrip->fadeIntervalUs = g_fade_interval_us;
   }
+
+  #if defined(RACK32)
+  // update event display on screen 
+  char buffer[40];
+  sprintf(buffer,"c.%d s.%d ", controller, strip);
+  strcat(buffer, ledStrip->state == LED_STATE_ON ? "on" : "off");
+  for (int ch = 0; ch < ledStrip->channels; ch++)
+  {
+    char colour[5];
+    sprintf(colour, " %d", ledStrip->colour[ch]);
+    strcat (buffer, colour);
+  }
+  // show event with proportional font for mor chracters per line
+  _screen.showEvent(buffer, FONT_PROP);
+  #endif
 }
 
 void jsonCommand(JsonVariant json)
@@ -759,12 +845,51 @@ void jsonConfig(JsonVariant json)
     g_fade_interval_us = json["fadeIntervalUs"].as<uint32_t>();
   }
 
+  #if defined(RACK32)
+  // LCD config
+  if (json.containsKey("activeBrightnessPercent"))
+  {
+    _screen.setBrightnessOn(json["activeBrightnessPercent"].as<int>());
+  }
+
+  if (json.containsKey("inactiveBrightnessPercent"))
+  {
+    _screen.setBrightnessDim(json["inactiveBrightnessPercent"].as<int>());
+  }
+
+  if (json.containsKey("activeDisplaySeconds"))
+  {
+    _screen.setOnTimeDisplay(json["activeDisplaySeconds"].as<int>());
+  }
+
+  if (json.containsKey("eventDisplaySeconds"))
+  {
+    _screen.setOnTimeEvent(json["eventDisplaySeconds"].as<int>());
+  }
+
+  // get the sensor update intervall for screen.showTemp()
+  if (json.containsKey("sensorUpdateSeconds"))
+  {
+    _tempUpdateMs = json["sensorUpdateSeconds"].as<uint32_t>() * 1000L;
+    if (_tempUpdateMs == 0L)
+    {
+      // wipes recent temp display on screen
+      _screen.hideTemp();
+    }
+  }
+#endif
+
   // Let the sensors handle any config
   sensors.conf(json);
 }
 
 void mqttCallback(char * topic, uint8_t * payload, unsigned int length) 
 {
+  #if defined(RACK32)
+  // Update screen
+  _screen.triggerMqttRxLed();
+  #endif
+ 
   // Pass this message down to our MQTT handler
   mqtt.receive(topic, payload, length);
 }
@@ -965,6 +1090,58 @@ void initialiseSerial()
   logger.println();
 }
 
+#if defined(RACK32)
+void _initialiseScreen(void)
+{
+  // Initialise the LCD
+  _screen.begin();
+
+  // Display the firmware and logo (either from SPIFFS or PROGMEM)
+  int returnCode = _screen.drawHeader(FW_SHORT_NAME, FW_MAKER, STRINGIFY(FW_VERSION), "ESP32", FW_LOGO);
+
+  switch (returnCode)
+  {
+  case LCD_INFO_LOGO_FROM_SPIFFS:
+      logger.println(F("[ledc] logo loaded from SPIFFS"));
+      break;
+  case LCD_INFO_LOGO_FROM_PROGMEM:
+      logger.println(F("[ledc] logo loaded from PROGMEM"));
+      break;
+  case LCD_INFO_LOGO_DEFAULT:
+      logger.println(F("[ledc] no logo found, using default OXRS logo"));
+      break;
+  case LCD_ERR_NO_LOGO:
+      logger.println(F("[ledc] no logo found"));
+      break;
+  }
+}
+
+void updateTempSensor(void)
+{
+  // Ignore if temp sensor not found or has been disabled
+  if (_tempUpdateMs == 0)
+  {
+      return;
+  }
+
+  // Check if we need to get a new temp reading and update
+  if ((millis() - _lastTempUpdate) > _tempUpdateMs)
+  {
+      // Read temp from onboard sensor
+      float temperature = sensors.getTemperatureValue();
+      if (!isnan(temperature))
+      {
+        // Display temp on screen
+        _screen.showTemp(temperature, sensors.getTemperatureUnits() == TEMP_C ? 'C' : 'F');
+      }
+
+      // Reset our timer
+      _lastTempUpdate = millis();
+  }
+}
+
+#endif
+
 /*--------------------------- Program -------------------------------*/
 void setup()
 {
@@ -993,6 +1170,11 @@ void setup()
 
     initialiseStrips(pwm);
   }
+
+  #if defined(RACK32)
+  _initialiseScreen();
+  _screen.drawPorts(PORT_LAYOUT_OUTPUT_AUTO, g_pwms_found);
+  #endif
 
   // Set up network/MQTT/REST API
   #if defined(WIFIMODE)
@@ -1035,4 +1217,12 @@ void loop()
   
   // publish sensor telemetry
   sensors.tele();
+
+  #if defined(RACK32)
+  // Update screen
+  _screen.loop();
+
+  // update temperature display
+  updateTempSensor();
+  #endif
 }
