@@ -349,7 +349,9 @@ void processStrips(uint8_t controller)
       if ((ledStrip->state == LED_STATE_ON))
       {
         if (ledStrip->colour[ch] > 0)
+        {
           bitSet(pcaState, channelOffset + ch);
+        }
       }
     }
     #endif
@@ -360,8 +362,7 @@ void processStrips(uint8_t controller)
 
   #if defined(OXRS_RACK32)
   // update port visualisation on screen
-  OXRS_LCD* screen = oxrs.getLCD();
-  screen->process(controller, pcaState);
+  oxrs.getLCD()->process(controller, pcaState);
   #endif
 }
 
@@ -505,8 +506,7 @@ void jsonChannelCommand(JsonVariant json)
     strcat (buffer, colour);
   }
   // show event with proportional font for more characters per line
-  OXRS_LCD* screen = oxrs.getLCD();
-  screen->showEvent(buffer, FONT_PROP);
+  oxrs.getLCD()->showEvent(buffer, FONT_PROP);
   #endif
 }
 
