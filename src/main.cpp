@@ -342,7 +342,7 @@ void processStrips(uint8_t controller)
       ledFade(driver, ledStrip, channelOffset, ledStrip->colour);
     }
 
-    #if defined(RACK32)
+    #if defined(OXRS_RACK32)
     // create bitfield of PCA status for screen display
     for (int ch = 0; ch < ledStrip->channels; ch++)
     {
@@ -358,7 +358,7 @@ void processStrips(uint8_t controller)
     channelOffset += ledStrip->channels;
   }
 
-  #if defined(RACK32)
+  #if defined(OXRS_RACK32)
   // update port visualisation on screen
   OXRS_LCD* screen = oxrs.getLCD();
   screen->process(controller, pcaState);
@@ -493,7 +493,7 @@ void jsonChannelCommand(JsonVariant json)
     ledStrip->fadeIntervalUs = g_fade_interval_us;
   }
 
-  #if defined(RACK32)
+  #if defined(OXRS_RACK32)
   // update event display on screen 
   char buffer[40];
   sprintf(buffer,"c.%d s.%d ", controller, strip);
@@ -564,7 +564,7 @@ void setup()
   // Start hardware
   oxrs.begin(jsonConfig, jsonCommand);
 
-  #if defined(RACK32)
+  #if defined(OXRS_RACK32)
   oxrs.setDisplayPortLayout(g_pwms_found, PORT_LAYOUT_OUTPUT_AUTO);
   #endif
 
