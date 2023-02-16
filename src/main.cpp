@@ -35,6 +35,10 @@ OXRS_8266 oxrs;
 #include "logo.h"                     // Embedded maker logo
 OXRS_Rack32 oxrs(FW_LOGO);
 
+#elif defined(OXRS_ROOM8266)
+#include <OXRS_Room8266.h>            // Room8266 support
+OXRS_Room8266 oxrs;
+
 #elif defined(OXRS_LILYGO)
 #include <OXRS_LILYGOPOE.h>           // LilyGO T-ETH-POE support
 OXRS_LILYGOPOE oxrs;
@@ -212,6 +216,9 @@ void setCommandSchema()
 void initialisePwmDrivers()
 {
   #if defined(PCA_MODE)
+  // Start the I2C bus
+  Wire.begin(I2C_SDA, I2C_SCL);
+  
   oxrs.println(F("[ledc] scanning for PWM drivers..."));
 
   for (uint8_t pca = 0; pca < sizeof(PCA_I2C_ADDRESS); pca++)
@@ -542,9 +549,6 @@ void setup()
   delay(1000);  
   Serial.println(F("[ledc] starting up..."));
 
-  // Start the I2C bus
-  Wire.begin(I2C_SDA, I2C_SCL);
-  
   // Initialise PWM drivers
   initialisePwmDrivers();
 
