@@ -358,7 +358,7 @@ void processStrips(uint8_t controller)
 
   #if defined(OXRS_RACK32)
   // update port visualisation on screen
-  oxrs.getLCD()->process(controller, pcaState);
+  oxrs.updateDisplayPorts(controller, pcaState);
   #endif
 }
 
@@ -501,6 +501,7 @@ void jsonChannelCommand(JsonVariant json)
     sprintf(colour, " %d", ledStrip->colour[ch]);
     strcat (buffer, colour);
   }
+  
   // show event with proportional font for more characters per line
   oxrs.getLCD()->showEvent(buffer, FONT_PROP);
   #endif
