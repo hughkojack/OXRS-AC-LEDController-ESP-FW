@@ -14,10 +14,6 @@
 //#define PCA_MODE          // 16ch PCA9865 PWM controllers (I2C)
 //#define GPIO_PWM1-5       // 5ch GPIO MOSFETs
 
-/*--------------------------- Macros ----------------------------------*/
-#define STRINGIFY(s) STRINGIFY1(s)
-#define STRINGIFY1(s) #s
-
 /*--------------------------- Libraries -------------------------------*/
 #include <Arduino.h>
 #include <ledPWM.h>                 // For PWM LED controller
