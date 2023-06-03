@@ -17,6 +17,7 @@
 /*--------------------------- Libraries -------------------------------*/
 #include <Arduino.h>
 #include <ledPWM.h>                 // For PWM LED controller
+#include <OXRS_SENSORS.h>           // For QWICC I2C sensors
 
 #if defined(OXRS_ESP32)
 #include <OXRS_32.h>                  // ESP32 support
@@ -95,6 +96,9 @@ PWMDriver pwmDriver[PWM_CONTROLLER_COUNT];
 // LED strip config (allow for a max of all single LED strips)
 LEDStrip ledStrips[PWM_CONTROLLER_COUNT][PWM_CHANNEL_COUNT];
 
+// I2C sensors
+OXRS_SENSORS sensors;
+
 /*--------------------------- JSON builders -----------------*/
 void setConfigSchema()
 {
@@ -143,6 +147,9 @@ void setConfigSchema()
   fadeIntervalUs["type"] = "integer";
   fadeIntervalUs["minimum"] = 0;
   fadeIntervalUs["description"] = "Default time to fade from off -> on (and vice versa), in microseconds (defaults to 500us)";
+
+  // Add any sensor config
+  sensors.setConfigSchema(json);
 
   // Pass our config schema down to the hardware library
   oxrs.setConfigSchema(json.as<JsonVariant>());
@@ -204,6 +211,9 @@ void setCommandSchema()
   JsonObject restart = json.createNestedObject("restart");
   restart["type"] = "boolean";
   restart["description"] = "Restart the controller";
+
+  // Add any sensor commands
+  sensors.setCommandSchema(json);
 
   // Pass our command schema down to the hardware library
   oxrs.setCommandSchema(json.as<JsonVariant>());
@@ -521,6 +531,9 @@ void jsonCommand(JsonVariant json)
   {
     ESP.restart();
   }
+
+  // Let the sensors handle any commands
+  sensors.cmnd(json);
 }
 
 void jsonConfig(JsonVariant json)
@@ -537,6 +550,9 @@ void jsonConfig(JsonVariant json)
   {
     g_fade_interval_us = json["fadeIntervalUs"].as<uint32_t>();
   }
+
+  // Let the sensors handle any config
+  sensors.conf(json);
 }
 
 /*--------------------------- Program -------------------------------*/
@@ -545,8 +561,11 @@ void setup()
   Serial.begin(SERIAL_BAUD_RATE);
   delay(1000);  
   Serial.println(F("[ledc] starting up..."));
+   
+  // Start the sensor library (scan for attached sensors)
+  sensors.begin();
 
-  // Initialise PWM drivers
+ // Initialise PWM drivers
   initialisePwmDrivers();
 
   // Initialise LED strips
@@ -582,5 +601,17 @@ void loop()
       continue;
     
     processStrips(pwm);
+  }
+
+  // update OLED (if present)
+  sensors.oled();
+  
+  // publish sensor telemetry (if any)
+  DynamicJsonDocument telemetry(150);
+  sensors.tele(telemetry.as<JsonVariant>());
+
+  if (telemetry.size() > 0)
+  {
+    oxrs.publishTelemetry(telemetry.as<JsonVariant>());
   }
 }
