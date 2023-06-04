@@ -222,9 +222,6 @@ void setCommandSchema()
 void initialisePwmDrivers()
 {
   #if defined(PCA_MODE)
-  // Start the I2C bus
-  Wire.begin(I2C_SDA, I2C_SCL);
-  
   oxrs.println(F("[ledc] scanning for PWM drivers..."));
 
   for (uint8_t pca = 0; pca < sizeof(PCA_I2C_ADDRESS); pca++)
@@ -561,11 +558,14 @@ void setup()
   Serial.begin(SERIAL_BAUD_RATE);
   delay(1000);  
   Serial.println(F("[ledc] starting up..."));
-   
+
+  // Start the I2C bus
+  Wire.begin(I2C_SDA, I2C_SCL);
+  
   // Start the sensor library (scan for attached sensors)
   sensors.begin();
 
- // Initialise PWM drivers
+  // Initialise PWM drivers
   initialisePwmDrivers();
 
   // Initialise LED strips
@@ -603,11 +603,8 @@ void loop()
     processStrips(pwm);
   }
 
-  // update OLED (if present)
-  sensors.oled();
-  
-  // publish sensor telemetry (if any)
-  DynamicJsonDocument telemetry(150);
+  // Publish sensor telemetry (if any)
+  StaticJsonDocument<150> telemetry;
   sensors.tele(telemetry.as<JsonVariant>());
 
   if (telemetry.size() > 0)
