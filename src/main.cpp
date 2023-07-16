@@ -365,7 +365,7 @@ void processStrips(uint8_t controller)
 
   #if defined(OXRS_RACK32)
   // update port visualisation on screen
-  oxrs.updateDisplayPorts(controller, pcaState);
+  oxrs.getLCD()->process(controller, pcaState);
   #endif
 }
 
@@ -581,7 +581,7 @@ void setup()
   oxrs.begin(jsonConfig, jsonCommand);
 
   #if defined(OXRS_RACK32)
-  oxrs.setDisplayPortLayout(g_pwms_found, PORT_LAYOUT_OUTPUT_AUTO);
+  oxrs.getLCD()->drawPorts(PORT_LAYOUT_OUTPUT_AUTO, g_pwms_found);
   #endif
 
   // Set up the config/command schema (for self-discovery and adoption)
