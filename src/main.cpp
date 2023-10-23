@@ -249,19 +249,16 @@ void initialisePwmDrivers()
   #else
   oxrs.println(F("[ledc] using direct PWM control via GPIOs..."));
 
-  for (uint8_t i = 0; i < PWM_CHANNEL_COUNT; i++)
-  {
-    oxrs.print(F("[ledc]  - GPIO_PWM1 -> "));
-    oxrs.println(GPIO_PWM1);
-    oxrs.print(F("[ledc]  - GPIO_PWM2 -> "));
-    oxrs.println(GPIO_PWM2);
-    oxrs.print(F("[ledc]  - GPIO_PWM3 -> "));
-    oxrs.println(GPIO_PWM3);
-    oxrs.print(F("[ledc]  - GPIO_PWM4 -> "));
-    oxrs.println(GPIO_PWM4);
-    oxrs.print(F("[ledc]  - GPIO_PWM5 -> "));
-    oxrs.println(GPIO_PWM5);
-  }
+  oxrs.print(F("[ledc]  - GPIO_PWM1 -> "));
+  oxrs.println(GPIO_PWM1);
+  oxrs.print(F("[ledc]  - GPIO_PWM2 -> "));
+  oxrs.println(GPIO_PWM2);
+  oxrs.print(F("[ledc]  - GPIO_PWM3 -> "));
+  oxrs.println(GPIO_PWM3);
+  oxrs.print(F("[ledc]  - GPIO_PWM4 -> "));
+  oxrs.println(GPIO_PWM4);
+  oxrs.print(F("[ledc]  - GPIO_PWM5 -> "));
+  oxrs.println(GPIO_PWM5);
 
   // Initialise the direct PWM for this address
   bitWrite(g_pwms_found, 0, 1);  
