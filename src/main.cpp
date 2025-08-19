@@ -1,611 +1,347 @@
 /**
-  PWM LED controller firmware for the Open eXtensible Rack System
-
-  Documentation:  
-    https://oxrs.io/docs/hardware/output-devices/pwm-controllers.html
-  
-  GitHub repository:
-    https://github.com/austinscreations/OXRS-AC-LEDController-ESP-FW
-
-  Copyright 2022 Austins Creations
-*/
-
-/*------------------------- PWM Type ----------------------------------*/
-//#define PCA_MODE          // 16ch PCA9865 PWM controllers (I2C)
-//#define GPIO_PWM1-5       // 5ch GPIO MOSFETs
+ * HSG Light Controller Firmware
+ * * A stateful, multi-channel PWM LED controller with support for smooth fading,
+ * logical output mapping, groups, and a web UI for configuration.
+ * * Built on the HSG framework.
+ */
 
 /*--------------------------- Libraries -------------------------------*/
 #include <Arduino.h>
-#include <ledPWM.h>                 // For PWM LED controller
+#include <Adafruit_PWMServoDriver.h> // For PCA9685
 #include <OXRS_SENSORS.h>           // For QWICC I2C sensors
 
-#if defined(OXRS_ESP32)
-#include <OXRS_32.h>                  // ESP32 support
-OXRS_32 oxrs;
-
-#elif defined(OXRS_ESP8266)
-#include <OXRS_8266.h>                // ESP8266 support
-OXRS_8266 oxrs;
-
+// Board support package chooser
+#if defined(HSG_ESP32_POE)
+#include <HSG_32_POE.h>              // Our custom ESP32 POE support
+HSG_32_POE hsg;
 #elif defined(OXRS_RACK32)
 #include <OXRS_Rack32.h>              // Rack32 support
 #include "logo.h"                     // Embedded maker logo
 OXRS_Rack32 oxrs(FW_LOGO);
-
-#elif defined(OXRS_ROOM8266)
-#include <OXRS_Room8266.h>            // Room8266 support
-OXRS_Room8266 oxrs;
-
-#elif defined(OXRS_LILYGO)
-#include <OXRS_LILYGOPOE.h>           // LilyGO T-ETH-POE support
-OXRS_LILYGOPOE oxrs;
+// Add other board definitions here if needed
 #endif
 
 /*--------------------------- Constants ----------------------------------*/
-// Serial
-#define SERIAL_BAUD_RATE            115200
+#define CONFIG_JSON_PATH "/config.json"
 
-// Only support up to 5 LEDs per strip
-#define MAX_LED_COUNT               5
+// PCA9685 details
+#define MAX_PCA9685_BOARDS 10
+Adafruit_PWMServoDriver pca[MAX_PCA9685_BOARDS];
+byte pca_addr[MAX_PCA9685_BOARDS];
+int pca_count = 0;
 
-// Supported LED states
-#define LED_STATE_OFF               0
-#define LED_STATE_ON                1
+// Maximum number of logical outputs
+#define MAX_OUTPUTS 160 // 10 boards * 16 channels
+#define DEFAULT_FADE_MS 1000 // Default fade duration is 1 second
 
-// Default fade interval (microseconds)
-#define DEFAULT_FADE_INTERVAL_US    500L;
-
-// Number of PWM controllers and channels per controller
-#if defined(PCA_MODE)
-// Each PCA9865 is a PWM controller
-// See https://www.nxp.com/docs/en/data-sheet/PCA9685.pdf
-const byte    PCA_I2C_ADDRESS[]     = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
-const uint8_t PWM_CONTROLLER_COUNT  = sizeof(PCA_I2C_ADDRESS);
-// Each PCA9865 has 16 channels
-#define PWM_CHANNEL_COUNT           16
-
-#else
-// Each GPIO device is a single controller
-#define PWM_CONTROLLER_COUNT        1
-// Only 5 GPIO channels
-#define PWM_CHANNEL_COUNT           5
-#endif
-
-/*-------------------------- Internal datatypes --------------------------*/
-struct LEDStrip
-{
-  uint8_t index;
-  uint8_t channels;
-  uint8_t state;
-  uint8_t colour[MAX_LED_COUNT];
-
-  uint32_t fadeIntervalUs;
-  uint32_t lastFadeUs;
+/*--------------------------- Global State ---------------------------*/
+// This struct holds the complete state for each output, including fading information
+struct OutputState {
+  int startPwmValue = 0;
+  int currentPwmValue = 0;
+  int targetPwmValue = 0;
+  unsigned long fadeStartTime = 0;
+  unsigned long fadeDuration = DEFAULT_FADE_MS;
 };
+OutputState outputs[MAX_OUTPUTS];
 
-/*--------------------------- Global Variables ---------------------------*/
-// Each bit corresponds to a discovered PWM controller
-uint8_t g_pwms_found = 0;
+// This array stores the last "ON" brightness (0-100) for stateful ON/OFF commands
+int outputBrightness[MAX_OUTPUTS] = {0};
 
-// Fade interval used if no explicit interval defined in command payload
-uint32_t g_fade_interval_us = DEFAULT_FADE_INTERVAL_US;
-
-// PWM LED controllers
-PWMDriver pwmDriver[PWM_CONTROLLER_COUNT];
-
-// LED strip config (allow for a max of all single LED strips)
-LEDStrip ledStrips[PWM_CONTROLLER_COUNT][PWM_CHANNEL_COUNT];
+// This holds the device configuration in memory
+JsonDocument g_config;
 
 // I2C sensors
 OXRS_SENSORS sensors;
 
-/*--------------------------- JSON builders -----------------*/
-void setConfigSchema()
+// Forward declarations
+void setOutput(int, int, int);
+void processCommand(JsonVariant);
+void processFades();
+bool getPcaAddress(int, byte *, int *);
+void loadConfig();
+void scanI2cDevices(JsonVariant);
+
+/*
+ * Get the physical address (PCA board and channel) for a logical output
+ */
+bool getPcaAddress(int output, byte * addr, int * channel)
 {
-  // Define our config schema
-  StaticJsonDocument<1024> json;
-
-  JsonObject channels = json.createNestedObject("channels");
-  channels["type"] = "array";
-  channels["description"] = "Define what strips are connected where";
-  
-  JsonObject channelItems = channels.createNestedObject("items");
-  channelItems["type"] = "object";
-
-  JsonObject channelProperties = channelItems.createNestedObject("properties");
-
-  if (PWM_CONTROLLER_COUNT > 1)
+  JsonObject i2c = g_config["i2c"]["pca9685"];
+  if (i2c)
   {
-    JsonObject controller = channelProperties.createNestedObject("controller");
-    controller["type"] = "integer";
-    controller["minimum"] = 1;
-    controller["maximum"] = PWM_CONTROLLER_COUNT;
-    controller["description"] = "The index of the PCA controller this strip is connected to";
-  }
-  
-  JsonObject strip = channelProperties.createNestedObject("strip");
-  strip["type"] = "integer";
-  strip["minimum"] = 1;
-  strip["maximum"] = PWM_CHANNEL_COUNT;
-  strip["description"] = "Assigns an index to the strip, incrementing from 1, in the order it is wired to the controller";
-
-  JsonObject count = channelProperties.createNestedObject("count");
-  count["type"] = "integer";
-  count["minimum"] = 1;
-  count["maximum"] = MAX_LED_COUNT;
-  count["description"] = "Number of channels that the strip uses";
-
-  JsonArray required = channelItems.createNestedArray("required");
-  if (PWM_CONTROLLER_COUNT > 1)
-  {
-    required.add("controller");
-  }
-  required.add("strip");
-  required.add("count");
-
-  JsonObject fadeIntervalUs = json.createNestedObject("fadeIntervalUs");
-  fadeIntervalUs["type"] = "integer";
-  fadeIntervalUs["minimum"] = 0;
-  fadeIntervalUs["description"] = "Default time to fade from off -> on (and vice versa), in microseconds (defaults to 500us)";
-
-  // Add any sensor config
-  sensors.setConfigSchema(json);
-
-  // Pass our config schema down to the hardware library
-  oxrs.setConfigSchema(json.as<JsonVariant>());
-}
-
-void setCommandSchema()
-{
-  // Define our command schema
-  StaticJsonDocument<1024> json;
-  
-  JsonObject channels = json.createNestedObject("channels");
-  channels["type"] = "array";
-  channels["description"] = "Set the levels for each channel on a specified strip. Strip is identified by the index defined when configuring the controller. Levels are a value between 0-255. Optionally set a fade interval for this command, otherwise uses the controller fade interval (defaults to 500us).";
-  
-  JsonObject channelItems = channels.createNestedObject("items");
-  channelItems["type"] = "object";
-
-  JsonObject channelProperties = channelItems.createNestedObject("properties");
-
-  if (PWM_CONTROLLER_COUNT > 1)
-  {
-    JsonObject controller = channelProperties.createNestedObject("controller");
-    controller["type"] = "integer";
-    controller["minimum"] = 1;
-    controller["maximum"] = PWM_CONTROLLER_COUNT;
-  }
-
-  JsonObject strip = channelProperties.createNestedObject("strip");
-  strip["type"] = "integer";
-  strip["minimum"] = 1;
-  strip["maximum"] = PWM_CHANNEL_COUNT;
-
-  JsonObject state = channelProperties.createNestedObject("state");
-  state["type"] = "string";
-  JsonArray stateEnum = state.createNestedArray("enum");
-  stateEnum.add("on");
-  stateEnum.add("off");
-
-  JsonObject colour = channelProperties.createNestedObject("colour");
-  colour["type"] = "array";
-  colour["minItems"] = 1;
-  colour["maxItems"] = MAX_LED_COUNT;
-  JsonObject colourItems = colour.createNestedObject("items");
-  colourItems["type"] = "integer";
-  colourItems["minimum"] = 0;
-  colourItems["maximum"] = 255;
-
-  JsonObject fadeIntervalUs = channelProperties.createNestedObject("fadeIntervalUs");
-  fadeIntervalUs["type"] = "integer";
-  fadeIntervalUs["minimum"] = 0;
-
-  JsonArray required = channelItems.createNestedArray("required");
-  if (PWM_CONTROLLER_COUNT > 1)
-  {
-    required.add("controller");
-  }
-  required.add("strip");
-
-  JsonObject restart = json.createNestedObject("restart");
-  restart["type"] = "boolean";
-  restart["description"] = "Restart the controller";
-
-  // Add any sensor commands
-  sensors.setCommandSchema(json);
-
-  // Pass our command schema down to the hardware library
-  oxrs.setCommandSchema(json.as<JsonVariant>());
-}
-
-void initialisePwmDrivers()
-{
-  #if defined(PCA_MODE)
-  oxrs.println(F("[ledc] scanning for PWM drivers..."));
-
-  for (uint8_t pca = 0; pca < sizeof(PCA_I2C_ADDRESS); pca++)
-  {
-    oxrs.print(F(" - 0x"));
-    oxrs.print(PCA_I2C_ADDRESS[pca], HEX);
-    oxrs.print(F("..."));
-
-    // Check if there is anything responding on this address
-    Wire.beginTransmission(PCA_I2C_ADDRESS[pca]);
-    if (Wire.endTransmission() == 0)
+    for (JsonPair kv : i2c)
     {
-      // Initialise the PCA9685 driver for this address
-      bitWrite(g_pwms_found, pca, 1);
-      pwmDriver[pca].begin_i2c(PCA_I2C_ADDRESS[pca]);
-
-      oxrs.println(F("PCA9685"));
-    }
-    else
-    {
-      oxrs.println(F("empty"));
-    }
-  }
-
-  #else
-  oxrs.println(F("[ledc] using direct PWM control via GPIOs..."));
-
-  oxrs.print(F("[ledc]  - GPIO_PWM1 -> "));
-  oxrs.println(GPIO_PWM1);
-  oxrs.print(F("[ledc]  - GPIO_PWM2 -> "));
-  oxrs.println(GPIO_PWM2);
-  oxrs.print(F("[ledc]  - GPIO_PWM3 -> "));
-  oxrs.println(GPIO_PWM3);
-  oxrs.print(F("[ledc]  - GPIO_PWM4 -> "));
-  oxrs.println(GPIO_PWM4);
-  oxrs.print(F("[ledc]  - GPIO_PWM5 -> "));
-  oxrs.println(GPIO_PWM5);
-
-  // Initialise the direct PWM for this address
-  bitWrite(g_pwms_found, 0, 1);  
-  pwmDriver[0].begin_gpio(GPIO_PWM1, GPIO_PWM2, GPIO_PWM3, GPIO_PWM4, GPIO_PWM5);
-  #endif
-}
-
-/*--------------------------- LED -----------------*/
-void ledFade(PWMDriver * driver, LEDStrip * strip, uint8_t channelOffset, uint8_t colour[])
-{
-  if ((micros() - strip->lastFadeUs) > strip->fadeIntervalUs)
-  {    
-    if (strip->channels == 1) 
-    {
-      driver->crossfade(strip->index, channelOffset, colour[0]);
-    }
-    else if (strip->channels == 2) 
-    {
-      driver->crossfade(strip->index, channelOffset, colour[0], colour[1]);
-    }
-    else if (strip->channels == 3) 
-    {
-      driver->crossfade(strip->index, channelOffset, colour[0], colour[1], colour[2]);
-    }
-    else if (strip->channels == 4) 
-    {
-      driver->crossfade(strip->index, channelOffset, colour[0], colour[1], colour[2], colour[3]);
-    }
-    else if (strip->channels == 5) 
-    {
-      driver->crossfade(strip->index, channelOffset, colour[0], colour[1], colour[2], colour[3], colour[4]);
-    }  
-
-    strip->lastFadeUs = micros();
-  }
-}
-
-void initialiseStrips(uint8_t controller)
-{
-  for (uint8_t strip = 0; strip < PWM_CHANNEL_COUNT; strip++)
-  {
-    LEDStrip * ledStrip = &ledStrips[controller][strip];
-
-    // .index is immutable and shouldn't be changed
-    ledStrip->index = strip;
-    ledStrip->channels = 0;
-    ledStrip->state = LED_STATE_OFF;
-
-    for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
-    {
-      ledStrip->colour[colour] = 0;
-    }
-
-    ledStrip->fadeIntervalUs = g_fade_interval_us; 
-    ledStrip->lastFadeUs = 0L;
-  }
-}
-
-void processStrips(uint8_t controller)
-{
-  uint8_t OFF[MAX_LED_COUNT];
-  memset(OFF, 0, sizeof(OFF));
-  uint16_t pcaState = 0x0;
-
-  PWMDriver *driver = &pwmDriver[controller];
-
-  uint8_t channelOffset = 0;
-
-  for (uint8_t strip = 0; strip < PWM_CHANNEL_COUNT; strip++)
-  {
-    LEDStrip *ledStrip = &ledStrips[controller][strip];
-
-    if (ledStrip->state == LED_STATE_OFF)
-    {
-      // off
-      ledFade(driver, ledStrip, channelOffset, OFF);
-    }
-    else if (ledStrip->state == LED_STATE_ON)
-    {
-      // fade
-      ledFade(driver, ledStrip, channelOffset, ledStrip->colour);
-    }
-
-    #if defined(OXRS_RACK32)
-    // create bitfield of PCA status for screen display
-    for (int ch = 0; ch < ledStrip->channels; ch++)
-    {
-      if ((ledStrip->state == LED_STATE_ON))
+      JsonArray mappings = kv.value().as<JsonArray>();
+      for (int i = 0; i < mappings.size(); i++)
       {
-        if (ledStrip->colour[ch] > 0)
+        if (mappings[i].as<int>() == output)
         {
-          bitSet(pcaState, channelOffset + ch);
+          *addr = (byte)strtol(kv.key().c_str(), NULL, 0);
+          *channel = i;
+          return true;
         }
       }
     }
-    #endif
-
-    // increase offset
-    channelOffset += ledStrip->channels;
   }
-
-  #if defined(OXRS_RACK32)
-  // update port visualisation on screen
-  oxrs.getLCD()->process(controller, pcaState);
-  #endif
+  return false;
 }
 
-uint8_t getController(JsonVariant json)
+/*
+ * Kicks off a fade for a given output to a target brightness
+ */
+void setOutput(int output, int brightness, int fadeMs)
 {
-  // If only one controller supported then shortcut
-  if (PWM_CONTROLLER_COUNT == 1)
-    return 1;
-  
-  if (!json.containsKey("controller"))
-  {
-    oxrs.println(F("[ledc] missing controller"));
-    return 0;
-  }
-  
-  uint8_t controller = json["controller"].as<uint8_t>();
+  int outputIndex = output - 1;
+  if (outputIndex < 0 || outputIndex >= MAX_OUTPUTS) return;
 
-  // Check the controller is valid for this device
-  if (controller <= 0 || controller > PWM_CONTROLLER_COUNT)
-  {
-    oxrs.println(F("[ledc] invalid controller"));
-    return 0;
-  }
+  // Set the start and target values for the fade
+  outputs[outputIndex].startPwmValue = outputs[outputIndex].currentPwmValue;
+  outputs[outputIndex].targetPwmValue = map(brightness, 0, 100, 0, 4095);
+  outputs[outputIndex].fadeStartTime = millis();
+  outputs[outputIndex].fadeDuration = fadeMs;
 
-  return controller;
+  // Store the "ON" brightness (0-100) for stateful commands
+  if (brightness > 0)
+  {
+    outputBrightness[outputIndex] = brightness;
+  }
 }
 
-uint8_t getStrip(JsonVariant json)
+/*
+ * This function runs in the main loop to handle smooth transitions
+ */
+void processFades()
 {
-  if (!json.containsKey("strip"))
+  for (int i = 0; i < MAX_OUTPUTS; i++)
   {
-    oxrs.println(F("[ledc] missing strip"));
-    return 0;
-  }
-  
-  uint8_t strip = json["strip"].as<uint8_t>();
+    // Check if a fade is active for this output
+    if (outputs[i].currentPwmValue != outputs[i].targetPwmValue)
+    {
+      unsigned long elapsedTime = millis() - outputs[i].fadeStartTime;
 
-  // Check the strip is valid for this device
-  if (strip <= 0 || strip > PWM_CHANNEL_COUNT)
-  {
-    oxrs.println(F("[ledc] invalid strip"));
-    return 0;
-  }
+      int newPwmValue;
+      if (elapsedTime >= outputs[i].fadeDuration)
+      {
+        // Fade is complete, snap to the target value
+        newPwmValue = outputs[i].targetPwmValue;
+      }
+      else
+      {
+        // Fade is in progress, calculate the intermediate value (linear interpolation)
+        float progress = (float)elapsedTime / (float)outputs[i].fadeDuration;
+        newPwmValue = outputs[i].startPwmValue + (progress * (outputs[i].targetPwmValue - outputs[i].startPwmValue));
+      }
 
-  return strip;
+      // Only update the physical PWM chip if the value has actually changed
+      if (newPwmValue != outputs[i].currentPwmValue)
+      {
+        outputs[i].currentPwmValue = newPwmValue;
+        
+        byte addr;
+        int channel;
+        // i + 1 is the logical output number
+        if (getPcaAddress(i + 1, &addr, &channel))
+        {
+          // Find the correct PCA9685 board and set the PWM value
+          for (int j = 0; j < pca_count; j++)
+          {
+            if (pca_addr[j] == addr)
+            {
+              pca[j].setPWM(channel, 0, newPwmValue);
+              break;
+            }
+          }
+        }
+      }
+
+      // If the fade just completed, publish the final state to MQTT
+      if (newPwmValue == outputs[i].targetPwmValue)
+      {
+        JsonDocument json;
+        json["output"] = i + 1;
+        json["brightness"] = map(newPwmValue, 0, 4095, 0, 100);
+        json["state"] = (newPwmValue > 0) ? "ON" : "OFF";
+        hsg.publishStatus(json.as<JsonVariant>());
+      }
+    }
+  }
 }
 
-void jsonChannelConfig(JsonVariant json)
+/*
+ * Process a command for a single output or a group
+ */
+void processCommand(JsonVariant json)
 {
-  uint8_t controller = getController(json);
-  if (controller == 0) return;
-
-  uint8_t strip = getStrip(json);
-  if (strip == 0) return;
-
-  uint8_t count = json["count"].as<uint8_t>();
-
-  // controller/strip indexes are sent 1-based
-  LEDStrip * ledStrip = &ledStrips[controller - 1][strip - 1];
-
-  // set the config for this strip
-  ledStrip->channels = count;
-  ledStrip->state = LED_STATE_OFF;
-
-  for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
+  if (json.containsKey("group"))
   {
-    ledStrip->colour[colour] = 0;
-  }
-
-  // clear any strip config our new config overwrites
-  for (uint8_t i = strip; i < strip + count - 1; i++)
-  {
-    ledStrip = &ledStrips[controller - 1][i];
+    // Command is for a group
+    const char * groupName = json["group"];
+    int fadeMs = json.containsKey("fade") ? json["fade"].as<int>() : DEFAULT_FADE_MS;
     
-    ledStrip->channels = 0;
-    ledStrip->state = LED_STATE_OFF;
-
-    for (uint8_t colour = 0; colour < MAX_LED_COUNT; colour++)
+    JsonArray outputs = g_config["groups"][groupName];
+    if (outputs)
     {
-      ledStrip->colour[colour] = 0;
+      for (JsonVariant output : outputs)
+      {
+        // Create a new command for each output in the group
+        JsonDocument newCmd;
+        newCmd["output"] = output.as<int>();
+        if (json.containsKey("state")) newCmd["state"] = json["state"];
+        if (json.containsKey("brightness")) newCmd["brightness"] = json["brightness"];
+        newCmd["fade"] = fadeMs;
+        processCommand(newCmd.as<JsonVariant>());
+      }
+    }
+  }
+  else if (json.containsKey("output"))
+  {
+    // Command is for a single output
+    int output = json["output"];
+    int fadeMs = json.containsKey("fade") ? json["fade"].as<int>() : DEFAULT_FADE_MS;
+
+    if (json.containsKey("state"))
+    {
+      if (strcmp(json["state"], "ON") == 0)
+      {
+        // Turn ON to last known brightness
+        setOutput(output, outputBrightness[output - 1], fadeMs);
+      }
+      else if (strcmp(json["state"], "OFF") == 0)
+      {
+        // Turn OFF
+        setOutput(output, 0, fadeMs);
+      }
+    }
+    else if (json.containsKey("brightness"))
+    {
+      // Set to a specific brightness
+      setOutput(output, json["brightness"], fadeMs);
     }
   }
 }
 
-void jsonChannelCommand(JsonVariant json)
+/*
+ * MQTT command callback
+ */
+void mqttCommand(JsonVariant json)
 {
-  uint8_t controller = getController(json);
-  if (controller == 0) return;
-
-  uint8_t strip = getStrip(json);
-  if (strip == 0) return;
-
-  // controller/strip indexes are sent 1-based
-  LEDStrip * ledStrip = &ledStrips[controller - 1][strip - 1];
-
-  if (json.containsKey("state"))
-  {
-    if (strcmp(json["state"], "on") == 0)
-    {
-      ledStrip->state = LED_STATE_ON;
-    }
-    else if (strcmp(json["state"], "off") == 0)
-    {
-      ledStrip->state = LED_STATE_OFF;
-    }
-    else 
-    {
-      oxrs.println(F("[ledc] invalid state"));
-    }
-  }
-
-  if (json.containsKey("colour"))
-  {
-    JsonArray array = json["colour"].as<JsonArray>();
-    uint8_t colour = 0;
-    
-    for (JsonVariant v : array)
-    {
-      ledStrip->colour[colour++] = v.as<uint8_t>();
-    }
-  }
-
-  if (json.containsKey("fadeIntervalUs"))
-  {
-    ledStrip->fadeIntervalUs = json["fadeIntervalUs"].as<uint32_t>();
-  }
-  else
-  {
-    ledStrip->fadeIntervalUs = g_fade_interval_us;
-  }
-
-  #if defined(OXRS_RACK32)
-  // update event display on screen 
-  char buffer[40];
-  sprintf(buffer,"c.%d s.%d ", controller, strip);
-  strcat(buffer, ledStrip->state == LED_STATE_ON ? "on" : "off");
-  for (int ch = 0; ch < ledStrip->channels; ch++)
-  {
-    char colour[5];
-    sprintf(colour, " %d", ledStrip->colour[ch]);
-    strcat (buffer, colour);
-  }
-  
-  // show event with proportional font for more characters per line
-  oxrs.getLCD()->showEvent(buffer, FONT_PROP);
-  #endif
-}
-
-void jsonCommand(JsonVariant json)
-{
-  if (json.containsKey("channels"))
-  {
-    for (JsonVariant channel : json["channels"].as<JsonArray>())
-    {
-      jsonChannelCommand(channel);
-    }
-  }
-
-  if (json.containsKey("restart") && json["restart"].as<bool>())
-  {
-    ESP.restart();
-  }
+  // Log the received command
+  hsg.print(F("[main] received command: "));
+  serializeJson(json, hsg);
+  hsg.println();
 
   // Let the sensors handle any commands
   sensors.cmnd(json);
+
+  // Process any lighting commands
+  processCommand(json);
 }
 
-void jsonConfig(JsonVariant json)
+/*
+ * MQTT config callback
+ */
+void mqttConfig(JsonVariant json)
 {
-  if (json.containsKey("channels"))
+  // Merge the new config into our global config
+  for (JsonPair kv : json.as<JsonObject>())
   {
-    for (JsonVariant channel : json["channels"].as<JsonArray>())
-    {
-      jsonChannelConfig(channel);
-    }
-  }
-
-  if (json.containsKey("fadeIntervalUs"))
-  {
-    g_fade_interval_us = json["fadeIntervalUs"].as<uint32_t>();
+    g_config[kv.key()] = kv.value();
   }
 
   // Let the sensors handle any config
   sensors.conf(json);
 }
 
-/*--------------------------- Program -------------------------------*/
+/*
+ * Scans the I2C bus and populates a JSON object with found devices
+ */
+void scanI2cDevices(JsonVariant json)
+{
+  JsonArray pca9685 = json["i2c"]["pca9685"].to<JsonArray>();
+
+  for (byte i = 1; i < 127; i++)
+  {
+    Wire.beginTransmission(i);
+    if (Wire.endTransmission() == 0)
+    {
+      // For this firmware, we assume any detected I2C device is a PCA9685
+      pca9685.add(i);
+    }
+  }
+}
+
 void setup()
 {
-  Serial.begin(SERIAL_BAUD_RATE);
-  delay(1000);  
-  Serial.println(F("[ledc] starting up..."));
+  // Start serial and let it settle
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println(F("[main] starting up..."));
 
-  // Start the I2C bus
-  Wire.begin(I2C_SDA, I2C_SCL);
-  
+  // Start the board support package (which starts I2C and networking)
+  hsg.begin(mqttConfig, mqttCommand);
+
+  // Load our config from file
+  loadConfig();
+
   // Start the sensor library (scan for attached sensors)
   sensors.begin();
 
-  // Initialise PWM drivers
-  initialisePwmDrivers();
-
-  // Initialise LED strips
-  for (uint8_t pwm = 0; pwm < PWM_CONTROLLER_COUNT; pwm++)
+  // Scan for PCA9685 boards
+  JsonDocument doc;
+  scanI2cDevices(doc.as<JsonVariant>());
+  JsonArray pcaArray = doc["i2c"]["pca9685"];
+  
+  for (JsonVariant addr : pcaArray)
   {
-    if (bitRead(g_pwms_found, pwm) == 0)
-      continue;
-
-    initialiseStrips(pwm);
+    if (pca_count < MAX_PCA9685_BOARDS)
+    {
+      byte i2c_addr = addr.as<byte>();
+      pca_addr[pca_count] = i2c_addr;
+      pca[pca_count] = Adafruit_PWMServoDriver(i2c_addr);
+      pca[pca_count].begin();
+      pca[pca_count].setPWMFreq(1000);
+      pca_count++;
+      
+      Serial.print(F("[main] found PCA9685 at 0x"));
+      Serial.println(i2c_addr, HEX);
+    }
   }
-
-  // Start hardware
-  oxrs.begin(jsonConfig, jsonCommand);
-
-  #if defined(OXRS_RACK32)
-  oxrs.getLCD()->drawPorts(PORT_LAYOUT_OUTPUT_AUTO, g_pwms_found);
-  #endif
-
-  // Set up the config/command schema (for self-discovery and adoption)
-  setConfigSchema();
-  setCommandSchema();
 }
 
 void loop()
 {
-  // Let hardware handle any events etc
-  oxrs.loop();
+  // Let the board support package handle networking, etc.
+  hsg.loop();
 
-  // Iterate through each PWM controller
-  for (uint8_t pwm = 0; pwm < PWM_CONTROLLER_COUNT; pwm++)
-  {
-    if (bitRead(g_pwms_found, pwm) == 0)
-      continue;
-    
-    processStrips(pwm);
-  }
+  // Process any active fades
+  processFades();
 
   // Publish sensor telemetry (if any)
-  StaticJsonDocument<150> telemetry;
+  JsonDocument telemetry;
   sensors.tele(telemetry.as<JsonVariant>());
 
-  if (telemetry.size() > 0)
+  if (!telemetry.isNull())
   {
-    oxrs.publishTelemetry(telemetry.as<JsonVariant>());
+    hsg.publishTelemetry(telemetry.as<JsonVariant>());
+  }
+}
+
+/*
+ * Load config from file
+ */
+void loadConfig()
+{
+  // Mount file system
+  if (LittleFS.begin())
+  {
+    // Open config file
+    File file = LittleFS.open(CONFIG_JSON_PATH, "r");
+    if (file)
+    {
+      // Deserialize the JSON document
+      deserializeJson(g_config, file);
+      file.close();
+    }
   }
 }
