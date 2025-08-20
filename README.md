@@ -1,2 +1,2 @@
-# OXRS-AC-LEDController-ESP-FW
-OXRS firmware for controlling the various types of PWM controllers
+# HSG-LEDController-ESP32-POE-FW
+HSG firmware for controlling the LED light with PWM controllers
