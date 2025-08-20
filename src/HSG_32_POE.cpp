@@ -41,8 +41,8 @@ MqttLogger _logger(_mqttClient, "log", MqttLoggerMode::SerialOnly);
 const uint8_t * _fwLogo;
  
 // Supported firmware config and command schemas
-JsonDocument _fwConfigSchema;
-JsonDocument _fwCommandSchema;
+DynamicJsonDocument _fwConfigSchema(1024);
+DynamicJsonDocument _fwCommandSchema(1024);
 
 // MQTT callbacks wrapped by _mqttConfig/_mqttCommand
 jsonCallback _onConfig;
@@ -171,8 +171,8 @@ void _getI2CJson(JsonVariant json)
 void _getI2cConfigJson(JsonVariant json)
 {
   JsonObject properties = json["properties"].to<JsonObject>();
-  
-  JsonDocument pcaJson;
+
+  DynamicJsonDocument pcaJson(1024);
   _getI2CJson(pcaJson.as<JsonVariant>());
   JsonArray pcaArray = pcaJson["i2c"]["pca9685"].as<JsonArray>();
 
@@ -282,7 +282,7 @@ void _mqttConnected()
   _mqttClientConnected = true;
 
   // Publish device adoption info with the correct structure
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
   _apiAdopt(json.as<JsonVariant>());
   _publishWithCorrectTopic("adopt", json.as<JsonVariant>());
 
@@ -365,7 +365,7 @@ void _mqttCallback(char * topic, byte * payload, int length)
   if (strcmp(topic, commandTopic) == 0)
   {
     // It's a command for us, process it directly
-    static JsonDocument json;
+    static StaticJsonDocument<1024> json;
     json.clear();
     
     DeserializationError error = deserializeJson(json, message);
@@ -405,7 +405,7 @@ void HSG_32_POE::begin(jsonCallback config, jsonCallback command)
 
   Wire.begin(I2C_SDA, I2C_SCL);
 
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
   _getFirmwareJson(json.as<JsonVariant>());
 
   _logger.print(F("[poe] "));
@@ -425,7 +425,7 @@ void HSG_32_POE::begin(jsonCallback config, jsonCallback command)
   File file = LittleFS.open(MQTT_JSON_PATH, "r");
   if (file)
   {
-    JsonDocument mqttConfig;
+    DynamicJsonDocument mqttConfig(1024);
     deserializeJson(mqttConfig, file);
     if (mqttConfig.containsKey("topicPrefix")) {
       strcpy(_topicPrefix, mqttConfig["topicPrefix"]);

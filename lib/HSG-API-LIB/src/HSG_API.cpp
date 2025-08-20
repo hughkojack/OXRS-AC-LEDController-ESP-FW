@@ -172,7 +172,7 @@ void _apiCors(Request &req, Response &res)
 /* API endpoint handlers */
 void _getApiAdopt(Request &req, Response &res)
 {
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
 
   if (_apiAdopt)
   { 
@@ -185,7 +185,7 @@ void _getApiAdopt(Request &req, Response &res)
 
 void _getApiMqtt(Request &req, Response &res)
 {
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
 
   if (!_readJson(&json, MQTT_FILENAME))
   {
@@ -223,7 +223,7 @@ void _getApiMqtt(Request &req, Response &res)
 
 void _postApiMqtt(Request &req, Response &res)
 {
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
 
   DeserializationError error = deserializeJson(json, req);
   if (error) 
@@ -246,8 +246,8 @@ void _postApiMqtt(Request &req, Response &res)
 
 void _getApiConfig(Request &req, Response &res)
 {
-  JsonDocument json;
-  
+  DynamicJsonDocument json(1024);
+
   if (!_readJson(&json, CONFIG_FILENAME))
   {
     res.sendStatus(204);
@@ -260,7 +260,7 @@ void _getApiConfig(Request &req, Response &res)
 
 void _postApiConfig(Request &req, Response &res)
 {
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
 
   DeserializationError error = deserializeJson(json, req);
   if (error) 
@@ -281,7 +281,7 @@ void _postApiConfig(Request &req, Response &res)
 
 void _postApiCommand(Request &req, Response &res)
 {
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
 
   DeserializationError error = deserializeJson(json, req);
   if (error) 
@@ -382,14 +382,14 @@ void HSG_API::begin()
     _mountFS();
   }
 
-  JsonDocument mqtt;
+  DynamicJsonDocument mqtt(1024);
 
   if (_readJson(&mqtt, MQTT_FILENAME))
   {
     _setMqtt(mqtt.as<JsonVariant>());
   }
-  
-  JsonDocument config;
+
+  DynamicJsonDocument config(1024);
 
   if (_readJson(&config, CONFIG_FILENAME))
   {

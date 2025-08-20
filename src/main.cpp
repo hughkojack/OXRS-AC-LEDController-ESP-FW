@@ -8,7 +8,7 @@
 /*--------------------------- Libraries -------------------------------*/
 #include <Arduino.h>
 #include <Adafruit_PWMServoDriver.h> // For PCA9685
-#include <OXRS_SENSORS.h>           // For QWICC I2C sensors
+#include <HSG_SENSORS.h>              // For QWICC I2C sensors
 
 // Board support package chooser
 #if defined(HSG_ESP32_POE)
@@ -49,10 +49,10 @@ OutputState outputs[MAX_OUTPUTS];
 int outputBrightness[MAX_OUTPUTS] = {0};
 
 // This holds the device configuration in memory
-JsonDocument g_config;
+DynamicJsonDocument g_config(1024);
 
 // I2C sensors
-OXRS_SENSORS sensors;
+HSG_SENSORS sensors;
 
 // Forward declarations
 void setOutput(int, int, int);
@@ -158,7 +158,7 @@ void processFades()
       // If the fade just completed, publish the final state to MQTT
       if (newPwmValue == outputs[i].targetPwmValue)
       {
-        JsonDocument json;
+        DynamicJsonDocument json(1024);
         json["output"] = i + 1;
         json["brightness"] = map(newPwmValue, 0, 4095, 0, 100);
         json["state"] = (newPwmValue > 0) ? "ON" : "OFF";
@@ -185,7 +185,7 @@ void processCommand(JsonVariant json)
       for (JsonVariant output : outputs)
       {
         // Create a new command for each output in the group
-        JsonDocument newCmd;
+        DynamicJsonDocument newCmd(1024);
         newCmd["output"] = output.as<int>();
         if (json.containsKey("state")) newCmd["state"] = json["state"];
         if (json.containsKey("brightness")) newCmd["brightness"] = json["brightness"];
@@ -288,7 +288,7 @@ void setup()
   sensors.begin();
 
   // Scan for PCA9685 boards
-  JsonDocument doc;
+  DynamicJsonDocument doc(1024);
   scanI2cDevices(doc.as<JsonVariant>());
   JsonArray pcaArray = doc["i2c"]["pca9685"];
   
@@ -318,7 +318,7 @@ void loop()
   processFades();
 
   // Publish sensor telemetry (if any)
-  JsonDocument telemetry;
+  DynamicJsonDocument telemetry(1024);
   sensors.tele(telemetry.as<JsonVariant>());
 
   if (!telemetry.isNull())

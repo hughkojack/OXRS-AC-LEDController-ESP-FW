@@ -206,7 +206,7 @@ int HSG_MQTT::receive(char * topic, byte * payload, unsigned int length)
   char * topicType;
   topicType = strtok(&topic[strlen(_topicPrefix)], "/");
 
-  JsonDocument json;
+  DynamicJsonDocument json(1024);
   DeserializationError error = deserializeJson(json, payload);
   if (error) { return MQTT_RECEIVE_JSON_ERROR; }
 
@@ -285,7 +285,7 @@ bool HSG_MQTT::_connect(void)
   _client->setServer(_broker, _port);
 
   // Build our LWT payload
-  JsonDocument lwtJson;
+  DynamicJsonDocument lwtJson(1024);
   lwtJson["online"] = false;
 
   // Get our LWT offline payload as raw string

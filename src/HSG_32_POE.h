@@ -45,7 +45,7 @@ class HSG_32_POE : public Print
     // Implement Print.h wrapper
     virtual size_t write(uint8_t);
     using Print::write;
-
+    
   private:
     void _initialiseNetwork(byte * mac);
     void _initialiseMqtt(byte * mac);
